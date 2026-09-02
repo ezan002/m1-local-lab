@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>本地 Magentic-One 控制台</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">M1</span>
+      <div><h1>本地 Magentic-One 控制台</h1><p>LangGraph · Official WebSurfer · Phoenix</p></div>
+    </div>
+    <div class="topbar-actions">
+      <div class="top-trace" title="当前选中运行的 Phoenix trace ID">
+        <span>Trace</span><code id="top-trace-id">未选择</code><button id="copy-top-trace" type="button" disabled>复制</button>
+      </div>
+      <div class="health-group" aria-label="服务健康状态">
+        <span id="app-health" class="health-chip is-loading"><span class="health-dot"></span>应用检查中</span>
+        <span id="phoenix-health" class="health-chip is-loading"><span class="health-dot"></span>Phoenix 检查中</span>
+      </div>
+      <a id="phoenix-link" class="button secondary" target="_blank" rel="noopener noreferrer">打开 Phoenix</a>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="任务与历史运行">
+      <div class="sidebar-head">
+        <div><p class="eyebrow">工作区</p><h2>运行记录</h2></div>
+        <button id="refresh-runs" class="icon-button" type="button" title="刷新运行列表" aria-label="刷新运行列表">↻</button>
+      </div>
+      <button id="new-task" class="button primary wide" type="button">＋ 新建任务</button>
+      <div id="runs-status" class="list-status" role="status">正在加载运行记录…</div>
+      <div id="runs-list" class="run-list" aria-live="polite"></div>
+    </aside>
+
+    <main id="main-content" class="workspace">
+      <section id="composer" class="card composer-card" aria-labelledby="composer-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">任务</p><h2 id="composer-title">新建任务</h2></div>
+          <span class="cost-note">可能调用模型并产生费用</span>
+        </div>
+        <form id="task-form">
+          <label for="task-input">任务描述</label>
+          <textarea id="task-input" rows="4" maxlength="20000" required placeholder="例如：读取允许的 CSV 文件并总结关键事实"></textarea>
+          <label for="files-input">允许读取的文件 <span class="field-hint">可选，多个绝对路径用逗号分隔</span></label>
+          <input id="files-input" type="text" autocomplete="off" placeholder="C:\projects\m1-local-lab\datasets\sample.csv">
+          <div class="form-actions">
+            <span id="task-validation" class="validation" role="alert"></span>
+            <button id="start-run" class="button primary" type="submit"><span class="button-label">开始运行</span></button>
+          </div>
+        </form>
+      </section>
+
+      <section id="empty-selection" class="card empty-state">
+        <div class="empty-icon" aria-hidden="true">◎</div>
+        <h2>选择一个运行查看详情</h2>
+        <p>可以从左侧选择历史记录，或创建一个新任务。</p>
+      </section>
+
+      <div id="run-view" class="run-view" hidden>
+        <section class="card run-overview">
+          <div class="run-heading">
+            <div class="run-title-wrap">
+              <p class="eyebrow">当前运行</p>
+              <h2 id="run-title">—</h2>
+              <div id="lineage" class="lineage"></div>
+            </div>
+            <div class="run-controls" aria-label="运行控制">
+              <button id="pause-run" class="button secondary" type="button" disabled>暂停</button>
+              <button id="resume-run" class="button secondary" type="button" disabled>恢复</button>
+              <button id="replay-run" class="button secondary" type="button" disabled>回放</button>
+              <button id="fork-run" class="button secondary" type="button" disabled>分叉</button>
+            </div>
+          </div>
+
+          <div class="status-grid">
+            <div class="metric"><span>运行状态</span><strong id="run-status">—</strong></div>
+            <div class="metric"><span>当前节点</span><strong id="current-node">—</strong></div>
+            <div class="metric"><span>步骤</span><strong id="step-count">0</strong></div>
+            <div class="metric"><span>最近更新</span><strong id="updated-at">—</strong></div>
+          </div>
+
+          <div class="trace-row">
+            <span class="trace-label">Trace ID</span>
+            <code id="trace-id">等待首个 checkpoint…</code>
+            <button id="copy-trace" class="text-button" type="button" disabled>复制</button>
+            <span id="stream-status" class="stream-chip is-idle">未连接</span>
+            <button id="retry-stream" class="text-button" type="button" hidden>重试事件流</button>
+          </div>
+
+          <div id="action-help" class="action-help">请先选择一个非终结 checkpoint，才能回放或分叉。</div>
+        </section>
+
+        <section class="card flow-card" aria-labelledby="flow-title">
+          <div class="section-heading compact"><div><p class="eyebrow">流程</p><h2 id="flow-title">执行路径</h2></div><span id="worker-name" class="muted">Worker 按任务动态选择</span></div>
+          <div id="flow" class="flow" aria-label="LangGraph 执行流程">
+            <div class="flow-node" data-flow-node="planner"><span class="flow-index">1</span><strong>Planner</strong><small>规划与任务账本</small></div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-node" data-flow-node="orchestrator"><span class="flow-index">2</span><strong>Orchestrator</strong><small>调度与进度判断</small></div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-node worker" data-flow-node="worker"><span class="flow-index">3</span><strong>Worker</strong><small id="worker-detail">WebSurfer / File / Coder</small></div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-node" data-flow-node="finalizer"><span class="flow-index">4</span><strong>Finalizer</strong><small>基于证据形成结论</small></div>
+          </div>
+        </section>
+
+        <section id="problem-panel" class="problem-panel" hidden aria-live="polite"></section>
+
+        <section class="card output-card" aria-labelledby="output-title">
+          <div class="section-heading compact">
+            <div><p class="eyebrow">结果</p><h2 id="output-title">最终答案或当前输出</h2></div>
+            <button id="copy-output" class="text-button" type="button">复制输出</button>
+          </div>
+          <pre id="output" class="output-text">尚无输出。</pre>
+        </section>
+
+        <section class="card details-card">
+          <div class="tabs" role="tablist" aria-label="运行详情">
+            <button id="tab-events" class="tab is-active" role="tab" aria-selected="true" aria-controls="panel-events" tabindex="0">事件 <span id="event-count" class="count">0</span></button>
+            <button id="tab-evidence" class="tab" role="tab" aria-selected="false" aria-controls="panel-evidence" tabindex="-1">证据 <span id="evidence-count" class="count">0</span></button>
+            <button id="tab-checkpoints" class="tab" role="tab" aria-selected="false" aria-controls="panel-checkpoints" tabindex="-1">Checkpoint <span id="checkpoint-count" class="count">0</span></button>
+            <button id="tab-state" class="tab" role="tab" aria-selected="false" aria-controls="panel-state" tabindex="-1">State</button>
+          </div>
+
+          <div id="panel-events" class="tab-panel" role="tabpanel" aria-labelledby="tab-events">
+            <div id="events-empty" class="panel-empty">暂无事件。</div>
+            <ol id="events-list" class="event-list"></ol>
+          </div>
+
+          <div id="panel-evidence" class="tab-panel" role="tabpanel" aria-labelledby="tab-evidence" hidden>
+            <div class="evidence-grid">
+              <div><h3>引用</h3><div id="citations" class="link-list"></div></div>
+              <div><h3>截图与产物</h3><div id="artifacts" class="artifact-grid"></div></div>
+            </div>
+          </div>
+
+          <div id="panel-checkpoints" class="tab-panel" role="tabpanel" aria-labelledby="tab-checkpoints" hidden>
+            <div class="checkpoint-layout">
+              <div id="checkpoint-list" class="checkpoint-list"></div>
+              <div class="checkpoint-inspector">
+                <div class="inspector-head"><h3>Checkpoint 详情</h3><button id="copy-checkpoint" class="text-button" type="button" disabled>复制 ID</button></div>
+                <div id="checkpoint-detail" class="panel-empty">选择左侧 checkpoint 查看详情。</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="panel-state" class="tab-panel" role="tabpanel" aria-labelledby="tab-state" hidden>
+            <div class="state-toolbar"><p>完整状态只读展示，模型内容已按文本转义。</p><button id="copy-state" class="button secondary small" type="button">复制 JSON</button></div>
+            <details><summary>展开完整 State JSON</summary><pre id="state-json" class="state-json">{}</pre></details>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <dialog id="screenshot-dialog" class="dialog screenshot-dialog" aria-labelledby="screenshot-title">
+    <div class="dialog-head"><h2 id="screenshot-title">截图预览</h2><button class="icon-button" data-close-dialog="screenshot-dialog" type="button" aria-label="关闭截图预览">×</button></div>
+    <img id="screenshot-full" alt="运行截图大图">
+  </dialog>
+
+  <dialog id="fork-dialog" class="dialog" aria-labelledby="fork-title">
+    <form id="fork-form" method="dialog">
+      <div class="dialog-head"><div><h2 id="fork-title">创建分叉</h2><p>只允许修改后端白名单字段。</p></div><button class="icon-button" value="cancel" type="submit" aria-label="关闭分叉对话框">×</button></div>
+      <label for="fork-instruction">worker_instruction</label>
+      <textarea id="fork-instruction" rows="3" placeholder="可选：覆盖下一位 worker 的指令"></textarea>
+      <label for="fork-plan">plan <span class="field-hint">可选，每行一个步骤</span></label>
+      <textarea id="fork-plan" rows="4" placeholder="步骤一&#10;步骤二"></textarea>
+      <p class="warning-text">分叉本身不执行模型；之后恢复该分支可能重新访问网页并产生费用。</p>
+      <div class="dialog-actions"><button class="button secondary" value="cancel" type="submit">取消</button><button id="confirm-fork" class="button primary" value="default" type="button">创建分叉</button></div>
+    </form>
+  </dialog>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "m1-local-lab"
+version = "0.1.0"
+description = "Local LangGraph orchestration with official AutoGen WebSurfer and Phoenix"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "langgraph==1.2.11",
+  "langgraph-checkpoint-sqlite==3.1.1",
+  "aiosqlite==0.22.1",
+  "autogen-core==0.7.5",
+  "autogen-agentchat==0.7.5",
+  "autogen-ext[openai,web-surfer]==0.7.5",
+  "playwright==1.54.0",
+  "langchain-openai==1.6.0",
+  "arize-phoenix-otel==0.17.1",
+  "arize-phoenix-client==3.3.0",
+  "openinference-instrumentation-langchain==0.1.73",
+  "openinference-instrumentation-openai==0.1.57",
+  "fastapi==0.141.1",
+  "uvicorn==0.52.4",
+  "pydantic-settings==2.15.0",
+  "python-dotenv==1.2.3",
+  "python-multipart==0.0.32",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1", "pytest-asyncio==1.4.0", "httpx==0.28.1"]
+
+[project.scripts]
+m1-local = "m1_local.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+

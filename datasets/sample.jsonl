@@ -1,0 +1,3 @@
+{"case_id":"public-doc-1","task":"Visit https://playwright.dev/python/docs/library and report the Windows asyncio event-loop requirement with the source URL.","metadata":{"kind":"web"}}
+{"case_id":"local-file-1","task":"Summarize the explicitly allowed CSV file without accessing any other local file.","allowed_files":["./datasets/sample.csv"],"metadata":{"kind":"file"}}
+{"case_id":"code-1","task":"Draft a Python function that validates a UUID string. Save it as an unexecuted artifact.","metadata":{"kind":"code"}}

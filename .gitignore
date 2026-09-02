@@ -1,0 +1,62 @@
+# Local secrets and credentials (keep only the documented template)
+.env
+.env.*
+!.env.example
+.secrets/
+secrets.*
+*.pem
+*.key
+*credentials*.json
+*service-account*.json
+
+# Python environments, build products, and caches
+.venv/
+.venv-phoenix/
+venv/
+env/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Runtime state: SQLite/Phoenix databases, artifacts, browser profiles, logs,
+# PIDs, downloaded datasets, and caches all live below data/.
+/data/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+
+# Browser/test output and downloaded external repositories or datasets
+.playwright/
+playwright-report/
+test-results/
+browser-data/
+user-data-dir/
+.cache/
+.huggingface/
+/TraceElephant/
+/Who&When/
+/downloads/
+
+# Logs, PIDs, editor/OS temporary files, and local scratch data
+*.log
+*.pid
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+/test_data.csv
