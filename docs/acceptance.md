@@ -122,6 +122,21 @@ AutoGen 0.7.5 的 `on_messages()` 在其 `on_messages_stream()` 最终响应处�
 - DIRECT：Phoenix 可直接查看 `run_id`、`thread_id`、`branch_id`、`execution_id`、`langgraph_node`、`agent_name`、`step_number`、`status`；有值时可直接查看 `dataset_case_id`、`replay_of`、`fork_of`。精确 `checkpoint_id` 在 run 最终 span 和 `m1.checkpoint.commit` 上可见。
 - DEFERRED：节点/模型执行时 output checkpoint 尚未产生，需通过相同 `execution_id` 连接 `m1.checkpoint.commit`，不会回填已结束 span。模型/网络/浏览器/安全策略/提交不确定性的自动错误分类与责任归因仍留待错误归因阶段；旧 trace 也不会被追溯改写。
 
+### 离线错误归因后端 MVP（2026-09-02）
+
+- PASS：从稳定提交 `71cc37e740be9a755261f1c9153aca22b19eec09` 和未改变的 `m1-local-lab-v1.0-smoke` tag 创建 `feature/failure-attribution-mvp`；未新增 remote 或 push。
+- PASS：三种确定性方法 `last_active_agent`、`first_explicit_error`、`rule_based` 均只接收 label-free `AttributionInput`，支持 abstain；未调用模型或 Phoenix 查询。
+- PASS：inference/ground-truth 双视图由独立深拷贝构造。递归 guard 覆盖顶层、嵌套列表/字典、metadata 与 Pydantic 对象，发现 label/ground-truth/mistake 字段立即失败；predictor schema `extra=forbid`、frozen。自动化测试证明正常 view 可通过、泄漏被拒绝、evaluator 在 prediction 之后 join 且不修改 prediction。
+- PASS：TraceElephant 与 Who&When 使用独立 normalizer；三条既有样本共运行 3×3=9 次。评估区分 scored/abstained/label missing/trace truncated/evaluation failed，`None` 不转成 0，宏观结果同时报告 numerator/denominator。
+- PASS：截断字段均进入 evaluation 和 Phoenix metadata。TraceElephant original=31、retained=20、truncated=true，真实 decisive step=5 仍保留，因此本次 step_scorable=true；自动化 fixture 另验证“真实步骤已截断”时 step/joint/distance 排除分母、Agent 仍可评价。
+- PASS：复用 Phoenix Dataset `m1-local-lab-external-trace-smoke`（ID `RGF0YXNldDox`，version `RGF0YXNldFZlcnNpb246MQ==`），回查为 3 个唯一 examples；未创建重复 Dataset。
+- PASS：Phoenix Experiment `m1-local-lab-failure-attribution-mvp`，最终验收实例 ID `RXhwZXJpbWVudDo1`，回查 9 task runs、72 evaluations；8 个 evaluation 名称均带 `attribution.` 命名空间。prediction metadata 只含 method/case/source/revision 与 inference 可知的 truncation/provenance；label-derived scorable 字段只在 evaluation metadata，prediction 侧不含真实标签。
+- PASS：验证脚本输出 paid model calls=0、real WebSurfer calls=0、external tasks executed=false、full dataset downloaded=false、label leakage check=passed。外部历史只作为 Dataset example，没有伪装为新 OTel Trace。
+- PASS：定向 attribution 测试为 `17 passed`；完整离线回归为 `45 passed, 2 skipped in 24.33s`。原 28 passed, 2 skipped 能力均保留，未修改 runtime、LangGraph、Agent、API 或网页。
+- PASS：验证前后直接健康检查均为应用 `/api/health` HTTP 200 与 Phoenix `/healthz` HTTP 200。两项服务在脚本前已存在，脚本未启动 FastAPI/Phoenix，也未停止既有进程。
+
+三样本方法汇总：`last_active_agent` Agent exact 2/3、step/joint 0/3、distance 36/3、coverage 3/3；`first_explicit_error` Agent exact 1/3、step/joint 0/3、distance 1/1、coverage 1/3；`rule_based` Agent exact 1/3、step/joint 0/3、distance 27/3、coverage 3/3。该结果只证明管线可工作，不代表方法有效。逐 case 表和完整分母规则见 [failure-attribution-mvp.md](failure-attribution-mvp.md)。
+
 ## 当前未完全通过或需诚实说明
 
 - PARTIAL：两次完整图演示都完成了真实浏览、截图、checkpoint 和追踪，但最终摘要只写出“SelectorEventLoop 不兼容”，没有把同页的正向结论“Windows 需要 ProactorEventLoop”完整复述；独立真实 WebSurfer 公开站点验收多次准确返回 `Proactor`。适配器已加强“读取完整正向要求”的通用指令，但为避免继续重复收费，没有再执行第三次完整图。这是模型/编排结果质量局限，不伪装为全部语义验收成功。

@@ -6,6 +6,18 @@
 
 外部历史轨迹只写入 Phoenix Dataset example，标记 `trace_origin=imported_historical`、`executed_by_m1_local=false`、`external_task_executed=false`，不会转换成应用 OpenTelemetry spans。离线 Experiment 可引用单独的 RuleBasedGateway 本地验证 run/trace；该本地 trace 只证明适配器和管线可工作，不代表重跑了外部 task。完整 schema、版本与验收证据见 [external-dataset-smoke.md](external-dataset-smoke.md)。
 
+### 离线错误归因旁路
+
+`attribution.py` 与 `attribution_evaluation.py` 位于外部数据适配器之后，是完全独立于在线 LangGraph 的离线旁路。它不进入 runtime/state，不增加 Agent 或节点，不改变 Planner、Orchestrator、WebSurfer、FileReader、Coder、Finalizer 与 checkpoint/replay/fork 行为。
+
+```text
+ExternalTraceRecord
+  ├─ independent inference view → deterministic attribution → prediction
+  └─ ground-truth view ─────────────────────────────────────→ evaluator → Phoenix Experiment
+```
+
+inference view 在深拷贝后递归拒绝所有标签 key，预测函数只接受该 frozen Pydantic 对象；Ground Truth 只在 prediction 产生后交给 evaluator。TraceElephant 与 Who&When 使用独立 step normalizer。Phoenix task result 仅含 prediction 与 inference 可知的 source/revision/truncation/provenance metadata；label-derived scorable 字段只写入 evaluation metadata，真实标签仅位于 Dataset expected/output 和 evaluation 阶段。外部历史仍不生成 OTel spans。完整规则、分母语义和实测见 [failure-attribution-mvp.md](failure-attribution-mvp.md)。
+
 ## 组件关系
 
 ```text

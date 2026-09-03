@@ -105,6 +105,16 @@ $env:HEADLESS='true'
 
 JSONL 每行包含 `case_id`、`task`、可选 `allowed_files` 和 `metadata`。`--limit` 必填，用于明确控制串行真实模型调用的成本。每个案例有独立 thread；结果保留状态、答案、引用、耗时、模型调用次数、错误和产物。无法获得的 token 数写作 `unknown`。
 
+## 离线错误归因 MVP
+
+三条既有 TraceElephant/Who&When 历史样本可通过三种不调用模型的确定性方法预测“责任 Agent + 决定性步骤”，再由独立 evaluator 接入真实标签。预测输入经过深拷贝和递归禁用字段检查，Ground Truth 不会传给 predictor；截断导致决定性步骤未保留时，该 case 不进入 step 指标分母。
+
+```powershell
+& '.\.venv\Scripts\python.exe' '.\scripts\verify_failure_attribution_mvp.py'
+```
+
+脚本会安全复用或临时启动 Phoenix，复用 `m1-local-lab-external-trace-smoke` Dataset，并写入 `m1-local-lab-failure-attribution-mvp` Experiment。该命令不调用付费模型、不运行真实 WebSurfer、不执行外部任务，也不下载数据。接口、指标、实测结果和限制见 [docs/failure-attribution-mvp.md](docs/failure-attribution-mvp.md)。
+
 ## 数据与安全边界
 
 - 服务默认只绑定 `127.0.0.1`，API 校验 Host、Origin 和 CSRF；不建立公网隧道。

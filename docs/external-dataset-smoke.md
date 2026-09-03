@@ -99,6 +99,12 @@ git status --short
 
 结果：fetch `member_count=2827`、精确匹配 2、`downloaded_bytes=538175`；Phoenix smoke PASS、3 samples、0 paid model calls、3 completed local runs；最终完整离线套件 `28 passed, 2 skipped in 26.63s`，原基线 `19 passed, 2 skipped` 未回归。`git status --short` 返回 exit 1：当前目录不是 Git repository，因此无法用 Git 状态证明忽略结果；仍按 `.gitignore` 和文件位置隔离外部数据。
 
+## 后续离线归因兼容结果（2026-09-02）
+
+同一 Dataset 已由错误归因 MVP 幂等复用，回查仍为 3 个唯一 examples，没有复制原始数据或新增 Dataset。`AttributionInput` 分别通过 TraceElephant/Who&When normalizer 构造；真实 `responsible_agent`、`decisive_step` 和 `failure_reason` 只进入独立 Ground Truth/evaluator，不进入 predictor input、prediction 或 prediction metadata。
+
+Phoenix Experiment `m1-local-lab-failure-attribution-mvp` 的最终验收 ID 为 `RXhwZXJpbWVudDo1`：9 task runs、72 evaluations。TraceElephant 样本仍记录 original=31、retained=20、truncated=true；决定性步骤 5 在保留区间内，因此本次可评价 step。完整预测和指标见 [failure-attribution-mvp.md](failure-attribution-mvp.md)。本阶段新增下载量为 0，外部任务执行数、真实 WebSurfer 调用数和付费模型调用数均为 0。
+
 ## 未执行的操作与下一步建议
 
 未克隆或运行任何第三方仓库代码、Shell 脚本、Agent 系统、中间件或推理程序；未安装任何新依赖；未修改 `.venv` / `.venv-phoenix`；未使用 Docker/Node；未调用 OpenAI 或其他付费模型；未重跑原始 WebSurfer task；未运行完整 Who&When/TraceElephant 实验；未下载 TraceElephant 全量 ZIP。
