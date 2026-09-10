@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     phoenix_base_url: str = "http://127.0.0.1:6006"
     phoenix_otlp_endpoint: str = "http://127.0.0.1:6006/v1/traces"
     phoenix_project_name: str = "m1-local-lab"
+    attribution_dataset_name: str = "m1-local-lab-external-trace-smoke"
+    attribution_experiment_name: str = "m1-local-lab-failure-attribution-mvp"
+    attribution_experiment_id: str | None = None
     phoenix_working_dir: Path = Path("./data/phoenix")
     phoenix_allow_external_resources: bool = False
     langsmith_tracing: bool = False
@@ -112,4 +115,3 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-

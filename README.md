@@ -115,6 +115,20 @@ JSONL 每行包含 `case_id`、`task`、可选 `allowed_files` 和 `metadata`。
 
 脚本会安全复用或临时启动 Phoenix，复用 `m1-local-lab-external-trace-smoke` Dataset，并写入 `m1-local-lab-failure-attribution-mvp` Experiment。该命令不调用付费模型、不运行真实 WebSurfer、不执行外部任务，也不下载数据。接口、指标、实测结果和限制见 [docs/failure-attribution-mvp.md](docs/failure-attribution-mvp.md)。
 
+## 错误归因网页
+
+启动 Phoenix 和应用后，首页一级标签“错误归因”会通过 FastAPI 只读 API 展示最新的同名归因 Experiment。页面包含 Dataset/Experiment 概览、三种基线方法及有效分母、无刷新筛选、prediction/ground truth/evaluation 分区、截断提示和规范化步骤时间线。历史轨迹明确标为 `imported_historical`，不会被表示为本项目真实执行。
+
+读取层只使用 Phoenix 11.35.0 公共 Python API，不读取 Phoenix SQLite，也不抓取 Phoenix HTML。Experiment 默认按名称元数据选择最新实例；`ATTRIBUTION_EXPERIMENT_ID` 仅是可选覆盖项，不在生产代码中固定 opaque ID。Phoenix 不可用时，任务运行页仍可使用，归因页显示可重试的脱敏错误。
+
+真实浏览器验收使用项目现有 Chromium 和离线 `RuleBasedGateway`，不会触发模型或 WebSurfer：
+
+```powershell
+& '.\.venv\Scripts\python.exe' '.\scripts\verify_attribution_ui.py'
+```
+
+脚本检查端口后只管理自己启动的 Phoenix/Uvicorn，覆盖 1366×768、1920×1080 和 Playwright 125% 缩放模拟，并将未跟踪截图写入 `data/test-output/attribution-ui/`。接口、颜色/文字标签语义及验收细节见 [docs/failure-attribution-ui.md](docs/failure-attribution-ui.md)。
+
 ## 数据与安全边界
 
 - 服务默认只绑定 `127.0.0.1`，API 校验 Host、Origin 和 CSRF；不建立公网隧道。

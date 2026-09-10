@@ -4,13 +4,25 @@ import asyncio
 import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Path as ApiPath, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .attribution import AttributionMethodName
+from .attribution_read_model import (
+    AttributionCaseDetailRead,
+    AttributionCaseNotFound,
+    AttributionCasesRead,
+    AttributionDatasetNotFound,
+    AttributionExperimentNotFound,
+    AttributionReadModel,
+    AttributionReadUnavailable,
+    AttributionSummaryRead,
+    ResultStatus,
+)
 from .config import PROJECT_ROOT, Settings, get_settings
 from .runtime import AgentRuntime
 
@@ -40,7 +52,11 @@ def public_run(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def create_app(settings: Settings | None = None, runtime: AgentRuntime | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    runtime: AgentRuntime | None = None,
+    attribution_reader: AttributionReadModel | None = None,
+) -> FastAPI:
     cfg = settings or get_settings()
     engine = runtime or AgentRuntime(cfg)
     csrf_token = secrets.token_urlsafe(32)
@@ -55,6 +71,12 @@ def create_app(settings: Settings | None = None, runtime: AgentRuntime | None = 
     app = FastAPI(title="M1 Local Lab", lifespan=lifespan)
     app.state.runtime = engine
     app.state.csrf_token = csrf_token
+    app.state.attribution_reader = attribution_reader or AttributionReadModel(
+        cfg.phoenix_base_url,
+        dataset_name=cfg.attribution_dataset_name,
+        experiment_name=cfg.attribution_experiment_name,
+        experiment_id=cfg.attribution_experiment_id,
+    )
 
     @app.middleware("http")
     async def local_security(request: Request, call_next: Any):
@@ -102,6 +124,55 @@ def create_app(settings: Settings | None = None, runtime: AgentRuntime | None = 
     @app.get("/api/runs")
     async def runs() -> list[dict[str, Any]]:
         return [public_run(record) for record in engine.store.list_runs()]
+
+    async def read_attribution(call: Any) -> Any:
+        try:
+            return await asyncio.to_thread(call)
+        except AttributionDatasetNotFound as exc:
+            raise HTTPException(404, "Attribution dataset is not available.") from exc
+        except AttributionExperimentNotFound as exc:
+            raise HTTPException(404, "Attribution experiment is not available.") from exc
+        except AttributionCaseNotFound as exc:
+            raise HTTPException(404, "Attribution case is not available.") from exc
+        except AttributionReadUnavailable as exc:
+            raise HTTPException(503, "Phoenix attribution data is temporarily unavailable.") from exc
+
+    @app.get("/api/attribution/summary", response_model=AttributionSummaryRead)
+    async def attribution_summary() -> AttributionSummaryRead:
+        return await read_attribution(app.state.attribution_reader.summary)
+
+    @app.get("/api/attribution/cases", response_model=AttributionCasesRead)
+    async def attribution_cases(
+        source: Literal["TraceElephant", "Who&When"] | None = Query(None),
+        method: AttributionMethodName | None = Query(None),
+        result_status: ResultStatus | None = Query(None),
+        agent_correct: bool | None = Query(None),
+        step_correct: bool | None = Query(None),
+        trace_truncated: bool | None = Query(None),
+        limit: int = Query(100, ge=1, le=100),
+    ) -> AttributionCasesRead:
+        return await read_attribution(
+            lambda: app.state.attribution_reader.cases(
+                source=source,
+                method=method,
+                result_status=result_status,
+                agent_correct=agent_correct,
+                step_correct=step_correct,
+                trace_truncated=trace_truncated,
+                limit=limit,
+            )
+        )
+
+    @app.get(
+        "/api/attribution/cases/{dataset_case_id}", response_model=AttributionCaseDetailRead
+    )
+    async def attribution_case_detail(
+        dataset_case_id: str = ApiPath(min_length=1, max_length=200),
+        method: AttributionMethodName = Query("rule_based"),
+    ) -> AttributionCaseDetailRead:
+        return await read_attribution(
+            lambda: app.state.attribution_reader.case_detail(dataset_case_id, method)
+        )
 
     @app.post("/api/runs", status_code=202)
     async def create_run(body: RunRequest) -> dict[str, str]:

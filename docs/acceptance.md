@@ -1,5 +1,19 @@
 # 实机验收记录
 
+## 错误归因网页可视化与真实浏览器验收（2026-09-10）
+
+- PASS：从 `da3ef193bdd73474eec5191f1e267ee163c308a7` 创建 `feature/failure-attribution-ui`；稳定 tag `m1-local-lab-v1.0-smoke` 仍指向 `71cc37e740be9a755261f1c9153aca22b19eec09`，remote 为空。
+- PASS：新增三个 typed GET：`/api/attribution/summary`、`/api/attribution/cases`、`/api/attribution/cases/{dataset_case_id}`。仅调用 Phoenix 公共 `datasets`/`experiments` Python API，未查询内部 SQLite、未抓取网页 HTML、未在生产代码固定 Experiment ID。
+- PASS：零费用后端复验后，Dataset 仍为 3 个唯一 examples；最新具名 Experiment 为 `RXhwZXJpbWVudDo2`，含 9 task runs、72 evaluations。输出为 paid model calls=0、real WebSurfer calls=0、external task executed=false、label leakage check=passed。
+- PASS：页面显示 3 种方法及独立分母：`last_active_agent` 2/3、0/3、0/3、distance 12 (n=3)、coverage 3/3；`first_explicit_error` 1/3、0/3、0/3、distance 1 (n=1)、coverage 1/3；`rule_based` 1/3、0/3、0/3、distance 9 (n=3)、coverage 3/3。`None` 显示为“—”，不转成 0。
+- PASS：归因一级 tab、概览、筛选、列表、prediction/ground truth/evaluation 分区及纵向时间线均完成。TraceElephant 显示 original=31/retained=20/truncated=true，真实 step 5 和预测 step 20 分别以颜色和文字标签显示；2 个真实 abstain 能被筛选并显示。实际三样本没有 unscorable case，该状态由 fixture/API/UI 自动化测试覆盖，不伪造页面数据。
+- PASS：`scripts/verify_attribution_ui.py` 使用现有 Playwright Chromium 和 `RuleBasedGateway`，在 1366×768、1920×1080、Playwright 125% 缩放模拟（1536×864、device scale factor 1.25）均通过。每档打开 3 个唯一 case 并验证 20 步时间线；1366 档模拟 503 后重试恢复。
+- PASS：三档 Console errors=0、page errors=0、request failures=0、意外 4xx/5xx=0；归因请求分别为 20/16/16，无请求风暴。键盘 End/Home、焦点 outline、空筛选、复制 Experiment ID、安全 Phoenix 链接和页面级无横向溢出均通过。
+- PASS：六张真实截图位于被忽略的 `data/test-output/attribution-ui/`，未加入 Git。验收启动前后 6006、8000、8001 均未监听；临时 Phoenix PID 29904、Uvicorn PID 45280，只停止脚本自身进程。
+- PASS：最终完整测试为 `52 passed, 2 skipped in 28.44s`；两个隔离环境的 `pip check` 都返回 `No broken requirements found.`。归因/API 定向测试此前为 `25 passed`。
+
+详细数据边界、API、交互和限制见 [failure-attribution-ui.md](failure-attribution-ui.md)。
+
 记录日期：2026-08-28。所有命令均在 `C:\projects\m1-local-lab` 的 Windows PowerShell 执行；没有把 Linux 结果作为 Windows 验收。报告不含 API Key。
 
 ## External dataset compatibility smoke（2026-09-01）

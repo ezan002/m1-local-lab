@@ -26,7 +26,12 @@
     </div>
   </header>
 
-  <div class="app-shell">
+  <nav class="primary-tabs" role="tablist" aria-label="控制台主视图">
+    <button id="tab-runs-main" class="primary-tab is-active" role="tab" aria-selected="true" aria-controls="panel-runs-main" tabindex="0">任务运行</button>
+    <button id="tab-attribution-main" class="primary-tab" role="tab" aria-selected="false" aria-controls="panel-attribution-main" tabindex="-1">错误归因</button>
+  </nav>
+
+  <div id="panel-runs-main" class="app-shell" role="tabpanel" aria-labelledby="tab-runs-main">
     <aside class="sidebar" aria-label="任务与历史运行">
       <div class="sidebar-head">
         <div><p class="eyebrow">工作区</p><h2>运行记录</h2></div>
@@ -156,6 +161,83 @@
       </div>
     </main>
   </div>
+
+  <main id="panel-attribution-main" class="attribution-workspace" role="tabpanel" aria-labelledby="tab-attribution-main" hidden>
+    <section id="attribution-loading" class="card attribution-state" role="status">正在从 Phoenix 读取错误归因结果…</section>
+    <section id="attribution-error" class="card attribution-state is-error" role="alert" hidden>
+      <h2>错误归因结果暂不可用</h2>
+      <p id="attribution-error-message">请确认 Phoenix 和归因 Experiment 可用。</p>
+      <button id="retry-attribution" class="button secondary" type="button">重新加载</button>
+    </section>
+
+    <div id="attribution-content" class="attribution-content" hidden>
+      <section class="card attribution-overview" aria-labelledby="attribution-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">Imported historical · 只读</p><h2 id="attribution-title">错误归因概览</h2></div>
+          <div class="attribution-actions">
+            <button id="copy-experiment-id" class="button secondary small" type="button">复制 Experiment ID</button>
+            <a id="attribution-phoenix-link" class="button secondary small" target="_blank" rel="noopener noreferrer">在 Phoenix 中查看</a>
+          </div>
+        </div>
+        <div class="attribution-summary-grid">
+          <div class="metric"><span>Dataset</span><strong id="attribution-dataset">—</strong></div>
+          <div class="metric"><span>Experiment</span><strong id="attribution-experiment">—</strong></div>
+          <div class="metric"><span>样本 / 方法</span><strong id="attribution-counts">—</strong></div>
+          <div class="metric"><span>Phoenix</span><strong id="attribution-phoenix-status">—</strong></div>
+        </div>
+        <p class="attribution-disclaimer"><strong>基线说明：</strong><span id="attribution-disclaimer">本结果仅为基线管线验证，不代表算法有效。</span></p>
+      </section>
+
+      <section class="card attribution-metrics" aria-labelledby="attribution-metrics-title">
+        <div class="section-heading compact"><div><p class="eyebrow">Metrics</p><h2 id="attribution-metrics-title">方法指标</h2></div><span class="muted">— 表示不可评价，不按 0 计分</span></div>
+        <div class="table-scroll" tabindex="0" aria-label="归因方法指标表，可横向滚动">
+          <table>
+            <thead><tr><th>方法</th><th>Agent 命中</th><th>Step 命中</th><th>Joint 命中</th><th>Mean step distance</th><th>Coverage</th><th>有效分母</th></tr></thead>
+            <tbody id="attribution-metrics-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card attribution-browser" aria-labelledby="attribution-cases-title">
+        <div class="section-heading compact"><div><p class="eyebrow">Cases</p><h2 id="attribution-cases-title">样本筛选与详情</h2></div><span id="attribution-case-count" class="muted">0 条</span></div>
+        <form id="attribution-filters" class="attribution-filters" aria-label="错误归因筛选">
+          <label>数据源<select id="attribution-source-filter"><option value="">全部</option><option value="Who&When">Who&amp;When</option><option value="TraceElephant">TraceElephant</option></select></label>
+          <label>归因方法<select id="attribution-method-filter"><option value="">全部</option><option value="last_active_agent">last_active_agent</option><option value="first_explicit_error">first_explicit_error</option><option value="rule_based">rule_based</option></select></label>
+          <label>结果状态<select id="attribution-status-filter"><option value="">全部</option><option value="correct">正确</option><option value="agent_error">Agent 错误</option><option value="step_error">Step 错误</option><option value="joint_error">Agent + Step 错误</option><option value="abstain">Abstain</option><option value="unscorable">不可评价</option></select></label>
+          <label>截断状态<select id="attribution-truncated-filter"><option value="">全部</option><option value="true">已截断</option><option value="false">未截断</option></select></label>
+          <button id="reset-attribution-filters" class="button secondary" type="button">重置筛选</button>
+        </form>
+
+        <div id="attribution-cases-loading" class="panel-empty" role="status" hidden>正在加载样本…</div>
+        <div id="attribution-cases-error" class="panel-empty is-error" role="alert" hidden></div>
+        <div id="attribution-cases-empty" class="panel-empty" hidden>当前筛选没有结果，请调整条件。</div>
+        <div id="attribution-cases-table" class="table-scroll" tabindex="0" aria-label="归因样本表，可横向滚动">
+          <table>
+            <thead><tr><th>Case</th><th>来源</th><th>方法</th><th>预测 Agent / Step</th><th>真实 Agent / Step</th><th>Agent</th><th>Step</th><th>Coverage</th><th>轨迹</th></tr></thead>
+            <tbody id="attribution-cases-body"></tbody>
+          </table>
+        </div>
+
+        <section id="attribution-detail" class="attribution-detail" aria-labelledby="attribution-detail-title">
+          <div id="attribution-detail-empty" class="panel-empty">选择一条样本查看预测、真实标签和步骤时间线。</div>
+          <div id="attribution-detail-loading" class="panel-empty" role="status" hidden>正在加载样本详情…</div>
+          <div id="attribution-detail-error" class="panel-empty is-error" role="alert" hidden></div>
+          <div id="attribution-detail-content" hidden>
+            <div class="section-heading compact"><div><p class="eyebrow">Attribution detail</p><h2 id="attribution-detail-title">归因详情</h2></div><span id="attribution-detail-provenance" class="provenance-chip">imported historical</span></div>
+            <p id="attribution-task-summary" class="task-summary"></p>
+            <div id="attribution-truncation-note" class="truncation-note" hidden></div>
+            <div class="attribution-compare">
+              <section aria-labelledby="prediction-title"><h3 id="prediction-title">预测结果</h3><dl id="prediction-fields" class="detail-fields"></dl></section>
+              <section aria-labelledby="truth-title"><h3 id="truth-title">真实标签（仅评价层）</h3><dl id="truth-fields" class="detail-fields"></dl></section>
+              <section aria-labelledby="evaluation-title"><h3 id="evaluation-title">评价结果</h3><dl id="evaluation-fields" class="detail-fields"></dl></section>
+            </div>
+            <div class="timeline-heading"><h3>规范化步骤时间线</h3><p>蓝色=预测步骤；橙色=真实步骤；绿色=两者重合；红色=明确错误。每种状态同时显示文字标签。</p></div>
+            <ol id="attribution-timeline" class="attribution-timeline"></ol>
+          </div>
+        </section>
+      </section>
+    </div>
+  </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 

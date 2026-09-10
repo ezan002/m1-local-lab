@@ -1,5 +1,7 @@
 # 离线错误归因后端 MVP
 
+> 2026-09-10 更新：后端算法和评价边界保持不变；本文件末尾原有“没有 UI”限制已由只读可视化阶段解除。页面实现与新限制见 [failure-attribution-ui.md](failure-attribution-ui.md)。
+
 记录日期：2026-09-02（America/New_York）。本阶段只验证三条既有外部历史样本的数据流、隔离边界、指标和 Phoenix 集成，不证明归因算法有效性。
 
 ## 架构位置与隔离边界
@@ -68,7 +70,7 @@ TraceElephant 与 Who&When 分别由独立 normalizer 读取各自 step/agent/ev
 
 ## Phoenix 与重复验证
 
-复用 Dataset `m1-local-lab-external-trace-smoke`：ID `RGF0YXNldDox`，version ID `RGF0YXNldFZlcnNpb246MQ==`，只读回查仍为 3 个唯一 examples。新 Experiment `m1-local-lab-failure-attribution-mvp` 的最终验收实例 ID 为 `RXhwZXJpbWVudDo1`，包含 3 methods × 3 cases = 9 task runs，以及 8 个 namespaced evaluator × 9 = 72 evaluations。
+复用 Dataset `m1-local-lab-external-trace-smoke`：ID `RGF0YXNldDox`，version ID `RGF0YXNldFZlcnNpb246MQ==`，只读回查仍为 3 个唯一 examples。2026-09-10 零费用复验生成的最新具名 Experiment `m1-local-lab-failure-attribution-mvp` ID 为 `RXhwZXJpbWVudDo2`，包含 3 methods × 3 cases = 9 task runs，以及 8 个 namespaced evaluator × 9 = 72 evaluations。ID 仅是本次验收证据；生产读取层按名称元数据选择最新实例，不硬编码该值。
 
 Phoenix task result 保存 prediction 和仅由 inference 得到的 metadata：method、case、source、revision、步骤计数、truncated，以及 `trace_origin=imported_historical`、`executed_by_m1_local=false`、`external_task_executed=false`。`decisive_step_present_in_trace` 与 scorable 字段只写在 evaluation metadata；真实标签仍只存在 Dataset expected/output 与 evaluation 阶段。外部历史没有转换为新 OTel Trace。
 
@@ -82,4 +84,4 @@ Phoenix task result 保存 prediction 和仅由 inference 得到的 metadata：m
 
 ## 尚未实现
 
-没有 LLM predictor/evaluator、学习型或因果归因算法、全量 benchmark、阈值调优、模型/网络/浏览器/安全策略/checkpoint 的根因分类，也没有 UI。未来若引入真实算法，继续只接收 `AttributionInput`；LLM evaluator 只能位于预测后的 evaluator 边界，并需另行审批费用、数据许可、隐私策略和全量数据下载。
+没有 LLM predictor/evaluator、学习型或因果归因算法、全量 benchmark、阈值调优、模型/网络/浏览器/安全策略/checkpoint 的根因分类。现有只读 UI 只展示本节既有预测与评价，不改变算法；见 [failure-attribution-ui.md](failure-attribution-ui.md)。未来若引入真实算法，继续只接收 `AttributionInput`；LLM evaluator 只能位于预测后的 evaluator 边界，并需另行审批费用、数据许可、隐私策略和全量数据下载。

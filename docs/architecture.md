@@ -1,5 +1,24 @@
 # 架构与执行语义
 
+## 错误归因只读展示层
+
+`attribution_read_model.py` 位于离线 predictor/evaluator 和 Web 之间，不进入 `AgentRuntime`、LangGraph State 或 checkpoint 路径：
+
+```text
+label-free inference → deterministic predictor ┐
+ground truth ───────→ evaluator ───────────────┴→ Phoenix Experiment
+                                                    ↓ public client APIs only
+                                           AttributionReadModel
+                                                    ↓ typed GET JSON
+                                              attribution UI
+```
+
+读取层仅通过 Phoenix 11.35.0 公共 Dataset/Experiment Python API 查询最新同名 Experiment；不访问 Phoenix SQLite schema、不解析 Phoenix HTML，也不固定 opaque ID。60 秒进程内缓存复用同一历史快照，避免概览、筛选和详情重复拉取 72 条 evaluations；服务重启或缓存过期后重新按名称选择最新实例。可选 `ATTRIBUTION_EXPERIMENT_ID` 只用于显式运维覆盖。
+
+所有 response 都是 frozen/extra-forbid Pydantic model。结构化历史 payload、完整 prompt、网页正文和 HTML 不进入浏览器；步骤只保留 step/agent/event flags 与脱敏限长摘要。prediction、ground truth 和 evaluation 在 response/UI 中是明确不同区域，合并只发生在预测完成后的 read/evaluation 层，因此 predictor 的签名、输入和标签隔离 guard 均未改变。
+
+归因 API 是三个只读 GET，Phoenix/Dataset/Experiment/case 故障映射为稳定脱敏 404/503。前端没有新增 EventSource；筛选和详情请求使用 AbortController 与单调 token 防止过期响应覆盖。完整接口与颜色/文字语义见 [failure-attribution-ui.md](failure-attribution-ui.md)。
+
 ## 外部历史数据边界
 
 `external_datasets.py` 是独立于现有 JSONL runner 的只读适配边界。TraceElephant 与 Who&When 分别解析为统一 `ExternalTraceRecord`，但保留各自 source、revision、split、case ID、原 Agent 名称和 ground truth，不进入 LangGraph state，也不改变 LangGraph 的唯一调度器地位。

@@ -36,8 +36,15 @@ def test_local_host_origin_csrf_and_run_api(settings):
         script = client.get("/static/app.js")
         assert css.status_code == script.status_code == 200
         assert "run-view" in page.text and "screenshot-dialog" in page.text
+        assert 'id="tab-attribution-main"' in page.text
+        assert 'aria-controls="panel-attribution-main"' in page.text
+        assert 'id="attribution-timeline"' in page.text
         assert "events-log" in script.text and "Last-Event-ID" not in script.text
         assert "innerHTML" not in script.text
+        assert "outerHTML" not in script.text
+        assert "insertAdjacentHTML" not in script.text
+        assert script.text.count("new EventSource") == 1
+        assert "loadAttributionCases" in script.text and "AbortController" in script.text
 
         session = client.get("/api/session")
         assert session.status_code == 200

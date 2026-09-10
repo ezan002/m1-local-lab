@@ -44,7 +44,19 @@ const ui = {
   lastEventId: 0,
   submitting: false,
   detailTimer: null,
-  toastTimer: null
+  toastTimer: null,
+  attribution: {
+    loaded: false,
+    summary: null,
+    cases: [],
+    selectedKey: null,
+    summaryController: null,
+    casesController: null,
+    detailController: null,
+    summaryToken: 0,
+    casesToken: 0,
+    detailToken: 0
+  }
 };
 
 function element(tag, className, text) {
@@ -603,6 +615,288 @@ function renderState() {
   byId("state-json").textContent = JSON.stringify(ui.current, null, 2);
 }
 
+const ATTRIBUTION_STATUS_LABELS = {
+  correct: "正确",
+  agent_error: "Agent 错误",
+  step_error: "Step 错误",
+  joint_error: "Agent + Step 错误",
+  abstain: "Abstain",
+  unscorable: "不可评价"
+};
+
+function displayValue(value) {
+  return value === null || value === undefined || value === "" ? "—" : String(value);
+}
+
+function formatNumber(value) {
+  if (value === null || value === undefined) return "—";
+  const number = Number(value);
+  return Number.isInteger(number) ? String(number) : number.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function metricRatio(metric) {
+  if (!metric || metric.denominator === 0 || metric.numerator === null) return "—";
+  return `${formatNumber(metric.numerator)}/${metric.denominator}`;
+}
+
+function scoreChip(value, trueLabel = "命中", falseLabel = "未命中") {
+  if (value === null || value === undefined) return element("span", "result-chip is-na", "不可评价");
+  return element("span", value === 1 ? "result-chip is-pass" : "result-chip is-fail", value === 1 ? trueLabel : falseLabel);
+}
+
+function safeLocalPhoenixUrl(value) {
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    if (!["127.0.0.1", "localhost", "[::1]", "::1"].includes(url.hostname)) return null;
+    return url.href;
+  } catch { return null; }
+}
+
+function setAttributionShell(state, message = "") {
+  byId("attribution-loading").hidden = state !== "loading";
+  byId("attribution-error").hidden = state !== "error";
+  byId("attribution-content").hidden = state !== "content";
+  if (state === "error") byId("attribution-error-message").textContent = message || "请确认 Phoenix 和归因 Experiment 可用。";
+}
+
+async function loadAttribution({force = false} = {}) {
+  if (ui.attribution.loaded && !force) return;
+  ui.attribution.summaryController?.abort();
+  const controller = new AbortController();
+  ui.attribution.summaryController = controller;
+  const token = ++ui.attribution.summaryToken;
+  ui.attribution.loaded = false;
+  setAttributionShell("loading");
+  try {
+    const summary = await api("/api/attribution/summary", {signal: controller.signal});
+    if (token !== ui.attribution.summaryToken) return;
+    ui.attribution.summary = summary;
+    ui.attribution.loaded = true;
+    renderAttributionSummary();
+    setAttributionShell("content");
+    await loadAttributionCases();
+  } catch (error) {
+    if (error.name === "AbortError" || token !== ui.attribution.summaryToken) return;
+    setAttributionShell("error", `无法读取错误归因概览：${error.message}`);
+  }
+}
+
+function renderAttributionSummary() {
+  const summary = ui.attribution.summary;
+  if (!summary) return;
+  byId("attribution-dataset").textContent = `${summary.dataset_name} · ${shortId(summary.dataset_id, 18)}`;
+  byId("attribution-experiment").textContent = `${summary.experiment_name} · ${shortId(summary.experiment_id, 18)}`;
+  byId("attribution-counts").textContent = `${summary.example_count} 个样本 · ${summary.methods.length} 种方法`;
+  byId("attribution-phoenix-status").textContent = summary.phoenix_available ? "可用 · 只读" : "不可用";
+  byId("attribution-disclaimer").textContent = summary.disclaimer;
+  const phoenix = safeLocalPhoenixUrl(summary.phoenix_url);
+  const link = byId("attribution-phoenix-link");
+  if (phoenix) {
+    link.href = phoenix;
+    link.hidden = false;
+  } else {
+    link.removeAttribute("href");
+    link.hidden = true;
+  }
+  byId("copy-experiment-id").disabled = !summary.experiment_id;
+  const body = byId("attribution-metrics-body");
+  body.replaceChildren();
+  summary.method_metrics.forEach(item => {
+    const row = element("tr");
+    const distance = item.mean_step_distance.denominator
+      ? `${formatNumber(item.mean_step_distance.value)} (n=${item.mean_step_distance.denominator})`
+      : "—";
+    const denominators = `A ${item.agent_exact_match.denominator} · S ${item.step_exact_match.denominator} · J ${item.joint_exact_match.denominator} · D ${item.mean_step_distance.denominator}`;
+    [
+      item.method,
+      metricRatio(item.agent_exact_match),
+      metricRatio(item.step_exact_match),
+      metricRatio(item.joint_exact_match),
+      distance,
+      metricRatio(item.prediction_coverage),
+      denominators
+    ].forEach(value => row.append(element("td", "", value)));
+    body.append(row);
+  });
+}
+
+function attributionFilterQuery() {
+  const params = new URLSearchParams();
+  const filters = [
+    ["source", byId("attribution-source-filter").value],
+    ["method", byId("attribution-method-filter").value],
+    ["result_status", byId("attribution-status-filter").value],
+    ["trace_truncated", byId("attribution-truncated-filter").value]
+  ];
+  filters.forEach(([name, value]) => { if (value) params.set(name, value); });
+  return params.toString();
+}
+
+function setCasesState(state, message = "") {
+  byId("attribution-cases-loading").hidden = state !== "loading";
+  byId("attribution-cases-error").hidden = state !== "error";
+  byId("attribution-cases-empty").hidden = state !== "empty";
+  byId("attribution-cases-table").hidden = !["content"].includes(state);
+  if (state === "error") byId("attribution-cases-error").textContent = message;
+}
+
+async function loadAttributionCases() {
+  ui.attribution.casesController?.abort();
+  ui.attribution.detailController?.abort();
+  const controller = new AbortController();
+  ui.attribution.casesController = controller;
+  const token = ++ui.attribution.casesToken;
+  ui.attribution.selectedKey = null;
+  clearAttributionDetail();
+  setCasesState("loading");
+  const query = attributionFilterQuery();
+  try {
+    const result = await api(`/api/attribution/cases${query ? `?${query}` : ""}`, {signal: controller.signal});
+    if (token !== ui.attribution.casesToken) return;
+    ui.attribution.cases = result.items || [];
+    renderAttributionCases();
+    setCasesState(ui.attribution.cases.length ? "content" : "empty");
+  } catch (error) {
+    if (error.name === "AbortError" || token !== ui.attribution.casesToken) return;
+    ui.attribution.cases = [];
+    byId("attribution-case-count").textContent = "加载失败";
+    setCasesState("error", `样本加载失败：${error.message}`);
+  }
+}
+
+function renderAttributionCases() {
+  const body = byId("attribution-cases-body");
+  body.replaceChildren();
+  byId("attribution-case-count").textContent = `${ui.attribution.cases.length} 条`;
+  ui.attribution.cases.forEach(item => {
+    const key = `${item.dataset_case_id}|${item.method}`;
+    const row = element("tr", "case-row");
+    row.dataset.caseKey = key;
+    row.classList.toggle("is-selected", ui.attribution.selectedKey === key);
+    const caseCell = element("td");
+    const button = element("button", "case-select", shortId(item.dataset_case_id, 24));
+    button.type = "button";
+    button.title = item.dataset_case_id;
+    button.setAttribute("aria-label", `查看 ${item.dataset_case_id} 的 ${item.method} 详情`);
+    button.addEventListener("click", () => selectAttributionCase(item));
+    caseCell.append(button);
+    const source = element("td", "", `${item.source}\n${item.split}`);
+    source.style.whiteSpace = "pre-wrap";
+    const predicted = element("td", "", `${displayValue(item.predicted_agent)} / ${displayValue(item.predicted_step)}`);
+    const truth = element("td", "", `${displayValue(item.responsible_agent)} / ${displayValue(item.decisive_step)}`);
+    const coverage = scoreChip(item.prediction_coverage, "已预测", "Abstain");
+    const coverageCell = element("td"); coverageCell.append(coverage);
+    const traceCell = element("td");
+    traceCell.append(element("span", item.trace_truncated ? "result-chip is-warning" : "result-chip is-na", item.trace_truncated ? "已截断" : "完整保留"));
+    const agentCell = element("td"); agentCell.append(scoreChip(item.agent_exact_match));
+    const stepCell = element("td"); stepCell.append(scoreChip(item.step_exact_match));
+    row.append(caseCell, source, element("td", "", item.method), predicted, truth, agentCell, stepCell, coverageCell, traceCell);
+    body.append(row);
+  });
+}
+
+function clearAttributionDetail() {
+  byId("attribution-detail-empty").hidden = false;
+  byId("attribution-detail-loading").hidden = true;
+  byId("attribution-detail-error").hidden = true;
+  byId("attribution-detail-content").hidden = true;
+}
+
+async function selectAttributionCase(item) {
+  ui.attribution.detailController?.abort();
+  const controller = new AbortController();
+  ui.attribution.detailController = controller;
+  const token = ++ui.attribution.detailToken;
+  ui.attribution.selectedKey = `${item.dataset_case_id}|${item.method}`;
+  renderAttributionCases();
+  byId("attribution-detail-empty").hidden = true;
+  byId("attribution-detail-loading").hidden = false;
+  byId("attribution-detail-error").hidden = true;
+  byId("attribution-detail-content").hidden = true;
+  try {
+    const detail = await api(`/api/attribution/cases/${encodeURIComponent(item.dataset_case_id)}?method=${encodeURIComponent(item.method)}`, {signal: controller.signal});
+    if (token !== ui.attribution.detailToken) return;
+    renderAttributionDetail(detail);
+    byId("attribution-detail-loading").hidden = true;
+    byId("attribution-detail-content").hidden = false;
+  } catch (error) {
+    if (error.name === "AbortError" || token !== ui.attribution.detailToken) return;
+    byId("attribution-detail-loading").hidden = true;
+    byId("attribution-detail-error").hidden = false;
+    byId("attribution-detail-error").textContent = `详情加载失败：${error.message}`;
+  }
+}
+
+function appendDefinition(root, label, value) {
+  root.append(element("dt", "", label), element("dd", "", displayValue(value)));
+}
+
+function renderAttributionDetail(detail) {
+  byId("attribution-detail-title").textContent = `${shortId(detail.dataset_case_id, 32)} · ${detail.method}`;
+  byId("attribution-detail-provenance").textContent = `${detail.provenance.trace_origin} · 本项目未执行`;
+  byId("attribution-task-summary").textContent = detail.task_summary;
+  const truncation = byId("attribution-truncation-note");
+  truncation.hidden = !detail.trace_truncated;
+  truncation.textContent = detail.trace_truncated
+    ? `轨迹已截断：原始 ${detail.trace_original_step_count} 步，保留 ${detail.trace_retained_step_count} 步；真实决定步骤${detail.decisive_step_present_in_trace ? "仍在保留范围内" : "未被保留，因此 Step 不可评价"}。`
+    : "";
+  const prediction = byId("prediction-fields"); prediction.replaceChildren();
+  appendDefinition(prediction, "方法", detail.method);
+  appendDefinition(prediction, "预测 Agent", detail.predicted_agent);
+  appendDefinition(prediction, "预测 Step", detail.predicted_step);
+  appendDefinition(prediction, "状态", detail.prediction_status);
+  appendDefinition(prediction, "Confidence", formatNumber(detail.confidence));
+  appendDefinition(prediction, "Reason", detail.prediction_reason);
+  appendDefinition(prediction, "Evidence", detail.evidence_step_ids.length ? detail.evidence_step_ids.join(", ") : "无");
+  const truth = byId("truth-fields"); truth.replaceChildren();
+  appendDefinition(truth, "责任 Agent", detail.responsible_agent);
+  appendDefinition(truth, "决定 Step", detail.decisive_step);
+  appendDefinition(truth, "失败原因", detail.failure_reason);
+  appendDefinition(truth, "Agent 可评价", detail.agent_scorable ? "是" : "否");
+  appendDefinition(truth, "Step 可评价", detail.step_scorable ? "是" : "否");
+  const evaluation = byId("evaluation-fields"); evaluation.replaceChildren();
+  appendDefinition(evaluation, "结果状态", ATTRIBUTION_STATUS_LABELS[detail.result_status] || detail.result_status);
+  appendDefinition(evaluation, "Agent exact", detail.agent_exact_match);
+  appendDefinition(evaluation, "Step exact", detail.step_exact_match);
+  appendDefinition(evaluation, "Joint exact", detail.joint_exact_match);
+  appendDefinition(evaluation, "Step distance", detail.step_distance);
+  appendDefinition(evaluation, "Coverage", detail.prediction_coverage);
+  appendDefinition(evaluation, "不可评价原因", detail.unscorable_reason);
+  const timeline = byId("attribution-timeline"); timeline.replaceChildren();
+  const evidenceSteps = new Set(detail.evidence_step_ids.map(String));
+  detail.steps.forEach(step => {
+    const predicted = detail.predicted_step !== null && String(step.step_number) === String(detail.predicted_step);
+    const truthStep = detail.decisive_step !== null && String(step.step_number) === String(detail.decisive_step);
+    const match = predicted && truthStep;
+    const item = element("li", "timeline-step");
+    if (match) item.classList.add("is-match");
+    else {
+      if (predicted) item.classList.add("is-predicted");
+      if (truthStep) item.classList.add("is-truth");
+    }
+    if (step.explicit_error) item.classList.add("is-error");
+    const head = element("div", "timeline-step-head");
+    head.append(element("strong", "", `Step ${step.step_number}`), element("span", "", displayValue(step.agent_name)), element("span", "", step.message_type));
+    item.append(head, element("p", "timeline-step-summary", step.content_summary));
+    const tags = element("div", "timeline-tags");
+    if (match) tags.append(element("span", "timeline-tag is-match", "预测与真实一致"));
+    else {
+      if (predicted) tags.append(element("span", "timeline-tag is-predicted", "预测步骤"));
+      if (truthStep) tags.append(element("span", "timeline-tag is-truth", "真实步骤"));
+    }
+    if (step.explicit_error) tags.append(element("span", "timeline-tag is-error", "明确错误事件"));
+    if (evidenceSteps.has(String(step.step_number))) tags.append(element("span", "timeline-tag is-evidence", "Evidence"));
+    if (tags.childNodes.length) item.append(tags);
+    timeline.append(item);
+  });
+}
+
+function resetAttributionFilters() {
+  ["attribution-source-filter", "attribution-method-filter", "attribution-status-filter", "attribution-truncated-filter"].forEach(id => { byId(id).value = ""; });
+  loadAttributionCases();
+}
+
 function updateControls() {
   if (!ui.current) return;
   const status = ui.current.status;
@@ -714,29 +1008,34 @@ async function confirmFork() {
 }
 
 function activateTab(tab) {
-  document.querySelectorAll('[role="tab"]').forEach(button => {
+  const tablist = tab.closest('[role="tablist"]');
+  if (!tablist) return;
+  tablist.querySelectorAll('[role="tab"]').forEach(button => {
     const active = button === tab;
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-selected", String(active));
     button.tabIndex = active ? 0 : -1;
     byId(button.getAttribute("aria-controls")).hidden = !active;
   });
+  if (tab.id === "tab-attribution-main") loadAttribution();
 }
 
 function setupTabs() {
-  const tabs = [...document.querySelectorAll('[role="tab"]')];
-  tabs.forEach((tab, index) => {
-    tab.addEventListener("click", () => activateTab(tab));
-    tab.addEventListener("keydown", event => {
-      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-      event.preventDefault();
-      let next = index;
-      if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
-      if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
-      if (event.key === "Home") next = 0;
-      if (event.key === "End") next = tabs.length - 1;
-      activateTab(tabs[next]);
-      tabs[next].focus();
+  document.querySelectorAll('[role="tablist"]').forEach(tablist => {
+    const tabs = [...tablist.querySelectorAll('[role="tab"]')];
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => activateTab(tab));
+      tab.addEventListener("keydown", event => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        let next = index;
+        if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+        if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+        if (event.key === "Home") next = 0;
+        if (event.key === "End") next = tabs.length - 1;
+        activateTab(tabs[next]);
+        tabs[next].focus();
+      });
     });
   });
 }
@@ -764,6 +1063,10 @@ function bindActions() {
   byId("copy-output").addEventListener("click", () => copyText(byId("output").textContent, "输出"));
   byId("copy-state").addEventListener("click", () => copyText(byId("state-json").textContent, "State JSON"));
   byId("copy-checkpoint").addEventListener("click", () => copyText(ui.selectedCheckpoint?.checkpoint_id, "Checkpoint ID"));
+  byId("retry-attribution").addEventListener("click", () => loadAttribution({force: true}));
+  byId("copy-experiment-id").addEventListener("click", () => copyText(ui.attribution.summary?.experiment_id, "Experiment ID"));
+  ["attribution-source-filter", "attribution-method-filter", "attribution-status-filter", "attribution-truncated-filter"].forEach(id => byId(id).addEventListener("change", loadAttributionCases));
+  byId("reset-attribution-filters").addEventListener("click", resetAttributionFilters);
   window.addEventListener("beforeunload", closeEventSource);
   setupTabs();
   setupDialogs();
@@ -788,7 +1091,14 @@ async function initialize() {
 window.m1Console = {
   selectRun,
   reconnectEvents: connectEvents,
-  snapshot: () => ({runId: ui.currentRunId, lastEventId: ui.lastEventId, eventCount: ui.events.length, sourceOpen: Boolean(ui.source)})
+  snapshot: () => ({runId: ui.currentRunId, lastEventId: ui.lastEventId, eventCount: ui.events.length, sourceOpen: Boolean(ui.source)}),
+  attributionSnapshot: () => ({
+    loaded: ui.attribution.loaded,
+    caseCount: ui.attribution.cases.length,
+    selectedKey: ui.attribution.selectedKey,
+    experimentId: ui.attribution.summary?.experiment_id || null
+  }),
+  reloadAttribution: () => loadAttribution({force: true})
 };
 
 initialize();

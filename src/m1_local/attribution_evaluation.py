@@ -314,6 +314,7 @@ def log_suite_to_phoenix(
         experiment_name=experiment_name,
         experiment_description="Deterministic offline failure-attribution baselines over imported historical traces.",
         experiment_metadata={
+            "experiment_name": experiment_name,
             "methods": list(ATTRIBUTION_METHODS),
             "sample_count": len(expected_cases),
             "trace_origin": "imported_historical",
