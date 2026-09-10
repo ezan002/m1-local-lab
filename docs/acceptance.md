@@ -1,5 +1,17 @@
 # 实机验收记录
 
+## Attribution benchmark protocol v1（2026-09-10）
+
+- PASS：固定 HF revision `59b9fcba1aaed7bbf206b5f4d3c68b8face2f49c` 与仓库 revision `b2bae5c5b06d681d04ea5e9b63b7a30525c04925`；下载 1,903,897 bytes，低于 25 MiB 上限。两个 Parquet 覆盖完整 184 行，但仅 30 行进入基准。
+- PASS：manifest `c18401f0605f50ec8d422edcdcaca8d64ee77173324511a975889d0b88c6cb2b`；Hand-Crafted/Algorithm-Generated=10/20，Dev/Frozen Test=20/10，schema exclusion=0，固定顺序二次运行结果完全一致。
+- PASS：`src/m1_local/attribution.py` 与冻结提交 `da3ef193bdd73474eec5191f1e267ee163c308a7` 一致；没有增加方法、case 特判或 Frozen Test 调参。
+- PASS：label guard 覆盖所有 30 个 inference/Dataset input；真实 who/when/reason 只在 Dataset output 和 evaluator 阶段。`paid_model_calls=0`、`real_websurfer_calls=0`、`external_task_executed=false`。
+- PASS：总体 agent exact 16/90、step exact 6/87、step ±1 16/87、step ±2 20/87、coverage 76/90；Dev agent/step=9/60、2/57，Frozen Test agent/step=7/30、4/30。一个越界 step 按协议排除三个方法的 step 分母但保留 agent 分母。
+- PASS：Phoenix 逻辑 Dataset `m1-local-lab-who-when-benchmark-v1` 为 30 examples；因本机早期中间 manifest 已占用逻辑名，最终 canonical manifest 按冲突规则写入 `m1-local-lab-who-when-benchmark-v1-c18401f0605f`。Experiment `m1-local-lab-attribution-benchmark-v1` 为 90 runs、1170 evaluations、13 个 `attribution.*` 名称。仅使用公共 API。
+- PASS：新增定向测试 13 passed；最终完整回归 `65 passed, 2 skipped in 26.71s`；两个 `pip check` 均无损坏依赖；旧 external smoke 与 failure attribution MVP verifier 均 PASS。
+- PASS：验收结束后 6006/8000/8001 均关闭；没有停止任何预先存在的服务。API/config 未改变，因此按条件不重复执行 UI E2E。
+- LIMIT：数据卡没有独立数据许可，固定策略为仅本地研究、禁止再分发；本结果仅是 30 样本冻结基线，不证明算法有效。完整证据见 [attribution-benchmark-v1.md](attribution-benchmark-v1.md)。
+
 ## 错误归因网页可视化与真实浏览器验收（2026-09-10）
 
 - PASS：从 `da3ef193bdd73474eec5191f1e267ee163c308a7` 创建 `feature/failure-attribution-ui`；稳定 tag `m1-local-lab-v1.0-smoke` 仍指向 `71cc37e740be9a755261f1c9153aca22b19eec09`，remote 为空。

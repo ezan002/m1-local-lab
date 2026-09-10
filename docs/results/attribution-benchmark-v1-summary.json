@@ -1,0 +1,2451 @@
+{
+  "status": "PASS",
+  "benchmark_version": "who-when-benchmark-v1",
+  "protocol_version": "attribution-eval-v1",
+  "manifest_sha256": "c18401f0605f50ec8d422edcdcaca8d64ee77173324511a975889d0b88c6cb2b",
+  "baseline_version": "deterministic-baseline-v1",
+  "baseline_source_commit": "da3ef193bdd73474eec5191f1e267ee163c308a7",
+  "dataset_name": "m1-local-lab-who-when-benchmark-v1-c18401f0605f",
+  "dataset_id": "RGF0YXNldDoz",
+  "dataset_version_id": "RGF0YXNldFZlcnNpb246Mw==",
+  "dataset_created": true,
+  "dataset_example_count": 30,
+  "experiment_name": "m1-local-lab-attribution-benchmark-v1",
+  "experiment_id": "RXhwZXJpbWVudDoxMQ==",
+  "experiment_run_count": 90,
+  "evaluation_count": 1170,
+  "evaluation_names": [
+    "attribution.abstain_rate",
+    "attribution.agent_exact_match",
+    "attribution.agent_scorable",
+    "attribution.joint_exact_match",
+    "attribution.prediction_coverage",
+    "attribution.provenance_guard",
+    "attribution.selective_agent_accuracy",
+    "attribution.selective_step_accuracy",
+    "attribution.step_distance",
+    "attribution.step_exact_match",
+    "attribution.step_scorable",
+    "attribution.step_within_1",
+    "attribution.step_within_2"
+  ],
+  "sample_count": 30,
+  "source_split_counts": {
+    "Algorithm-Generated": 20,
+    "Hand-Crafted": 10
+  },
+  "benchmark_split_counts": {
+    "Dev": 20,
+    "Frozen Test": 10
+  },
+  "excluded_case_count": 0,
+  "trace_truncated_count": 0,
+  "decisive_step_not_retained_count": 1,
+  "label_leakage_check": "passed",
+  "fixed_order_reproducibility_check": "passed",
+  "frozen_baseline_check": "passed",
+  "paid_model_calls": 0,
+  "real_websurfer_calls": 0,
+  "external_task_executed": false,
+  "downloaded_bytes": 1903897,
+  "transfer_limit_bytes": 26214400,
+  "full_who_when_downloaded": true,
+  "license_policy": "local research use only; redistribution not authorized",
+  "phoenix_ui": "http://127.0.0.1:6006/experiments/RXhwZXJpbWVudDoxMQ==",
+  "summaries": [
+    {
+      "grouping": "overall",
+      "group": {
+        "all": "all"
+      },
+      "run_count": 90,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.17777777777777778,
+          "numerator": 16.0,
+          "denominator": 90,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.06896551724137931,
+          "numerator": 6.0,
+          "denominator": 87,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.05747126436781609,
+          "numerator": 5.0,
+          "denominator": 87,
+          "median": null
+        },
+        "step_distance": {
+          "value": 11.5,
+          "numerator": 851.0,
+          "denominator": 74,
+          "median": 4.0
+        },
+        "prediction_coverage": {
+          "value": 0.8444444444444444,
+          "numerator": 76.0,
+          "denominator": 90,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 90.0,
+          "denominator": 90,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.9666666666666667,
+          "numerator": 87.0,
+          "denominator": 90,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 90.0,
+          "denominator": 90,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.1839080459770115,
+          "numerator": 16.0,
+          "denominator": 87,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.22988505747126436,
+          "numerator": 20.0,
+          "denominator": 87,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.21052631578947367,
+          "numerator": 16.0,
+          "denominator": 76,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.08108108108108109,
+          "numerator": 6.0,
+          "denominator": 74,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.15555555555555556,
+          "numerator": 14.0,
+          "denominator": 90,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method",
+      "group": {
+        "method": "first_explicit_error"
+      },
+      "run_count": 30,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.1,
+          "numerator": 3.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.10344827586206896,
+          "numerator": 3.0,
+          "denominator": 29,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.10344827586206896,
+          "numerator": 3.0,
+          "denominator": 29,
+          "median": null
+        },
+        "step_distance": {
+          "value": 9.875,
+          "numerator": 158.0,
+          "denominator": 16,
+          "median": 2.0
+        },
+        "prediction_coverage": {
+          "value": 0.5333333333333333,
+          "numerator": 16.0,
+          "denominator": 30,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.9666666666666667,
+          "numerator": 29.0,
+          "denominator": 30,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.27586206896551724,
+          "numerator": 8.0,
+          "denominator": 29,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.27586206896551724,
+          "numerator": 8.0,
+          "denominator": 29,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.1875,
+          "numerator": 3.0,
+          "denominator": 16,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.1875,
+          "numerator": 3.0,
+          "denominator": 16,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.4666666666666667,
+          "numerator": 14.0,
+          "denominator": 30,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method",
+      "group": {
+        "method": "last_active_agent"
+      },
+      "run_count": 30,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.3333333333333333,
+          "numerator": 10.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 29,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 29,
+          "median": null
+        },
+        "step_distance": {
+          "value": 15.172413793103448,
+          "numerator": 440.0,
+          "denominator": 29,
+          "median": 5.0
+        },
+        "prediction_coverage": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.9666666666666667,
+          "numerator": 29.0,
+          "denominator": 30,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.034482758620689655,
+          "numerator": 1.0,
+          "denominator": 29,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.10344827586206896,
+          "numerator": 3.0,
+          "denominator": 29,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.3333333333333333,
+          "numerator": 10.0,
+          "denominator": 30,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 29,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 30,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method",
+      "group": {
+        "method": "rule_based"
+      },
+      "run_count": 30,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.1,
+          "numerator": 3.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.10344827586206896,
+          "numerator": 3.0,
+          "denominator": 29,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.06896551724137931,
+          "numerator": 2.0,
+          "denominator": 29,
+          "median": null
+        },
+        "step_distance": {
+          "value": 8.724137931034482,
+          "numerator": 253.0,
+          "denominator": 29,
+          "median": 4.0
+        },
+        "prediction_coverage": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.9666666666666667,
+          "numerator": 29.0,
+          "denominator": 30,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.2413793103448276,
+          "numerator": 7.0,
+          "denominator": 29,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.3103448275862069,
+          "numerator": 9.0,
+          "denominator": 29,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.1,
+          "numerator": 3.0,
+          "denominator": 30,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.10344827586206896,
+          "numerator": 3.0,
+          "denominator": 29,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 30,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "benchmark_split",
+      "group": {
+        "benchmark_split": "Dev"
+      },
+      "run_count": 60,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.15,
+          "numerator": 9.0,
+          "denominator": 60,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.03508771929824561,
+          "numerator": 2.0,
+          "denominator": 57,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.03508771929824561,
+          "numerator": 2.0,
+          "denominator": 57,
+          "median": null
+        },
+        "step_distance": {
+          "value": 12.63265306122449,
+          "numerator": 619.0,
+          "denominator": 49,
+          "median": 4.0
+        },
+        "prediction_coverage": {
+          "value": 0.85,
+          "numerator": 51.0,
+          "denominator": 60,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 60.0,
+          "denominator": 60,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.95,
+          "numerator": 57.0,
+          "denominator": 60,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 60.0,
+          "denominator": 60,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.21052631578947367,
+          "numerator": 12.0,
+          "denominator": 57,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.2807017543859649,
+          "numerator": 16.0,
+          "denominator": 57,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.17647058823529413,
+          "numerator": 9.0,
+          "denominator": 51,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.04081632653061224,
+          "numerator": 2.0,
+          "denominator": 49,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.15,
+          "numerator": 9.0,
+          "denominator": 60,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "benchmark_split",
+      "group": {
+        "benchmark_split": "Frozen Test"
+      },
+      "run_count": 30,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.23333333333333334,
+          "numerator": 7.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.13333333333333333,
+          "numerator": 4.0,
+          "denominator": 30,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.1,
+          "numerator": 3.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_distance": {
+          "value": 9.28,
+          "numerator": 232.0,
+          "denominator": 25,
+          "median": 6.0
+        },
+        "prediction_coverage": {
+          "value": 0.8333333333333334,
+          "numerator": 25.0,
+          "denominator": 30,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.13333333333333333,
+          "numerator": 4.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.13333333333333333,
+          "numerator": 4.0,
+          "denominator": 30,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.28,
+          "numerator": 7.0,
+          "denominator": 25,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.16,
+          "numerator": 4.0,
+          "denominator": 25,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.16666666666666666,
+          "numerator": 5.0,
+          "denominator": 30,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "source_split",
+      "group": {
+        "source_split": "Algorithm-Generated"
+      },
+      "run_count": 60,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.2,
+          "numerator": 12.0,
+          "denominator": 60,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.1,
+          "numerator": 6.0,
+          "denominator": 60,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.08333333333333333,
+          "numerator": 5.0,
+          "denominator": 60,
+          "median": null
+        },
+        "step_distance": {
+          "value": 3.6862745098039214,
+          "numerator": 188.0,
+          "denominator": 51,
+          "median": 4.0
+        },
+        "prediction_coverage": {
+          "value": 0.85,
+          "numerator": 51.0,
+          "denominator": 60,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 60.0,
+          "denominator": 60,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 1.0,
+          "numerator": 60.0,
+          "denominator": 60,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 60.0,
+          "denominator": 60,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.26666666666666666,
+          "numerator": 16.0,
+          "denominator": 60,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.2833333333333333,
+          "numerator": 17.0,
+          "denominator": 60,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.23529411764705882,
+          "numerator": 12.0,
+          "denominator": 51,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.11764705882352941,
+          "numerator": 6.0,
+          "denominator": 51,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.15,
+          "numerator": 9.0,
+          "denominator": 60,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "source_split",
+      "group": {
+        "source_split": "Hand-Crafted"
+      },
+      "run_count": 30,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.13333333333333333,
+          "numerator": 4.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 27,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 27,
+          "median": null
+        },
+        "step_distance": {
+          "value": 28.82608695652174,
+          "numerator": 663.0,
+          "denominator": 23,
+          "median": 21.0
+        },
+        "prediction_coverage": {
+          "value": 0.8333333333333334,
+          "numerator": 25.0,
+          "denominator": 30,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.9,
+          "numerator": 27.0,
+          "denominator": 30,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 30.0,
+          "denominator": 30,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 27,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.1111111111111111,
+          "numerator": 3.0,
+          "denominator": 27,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.16,
+          "numerator": 4.0,
+          "denominator": 25,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 23,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.16666666666666666,
+          "numerator": 5.0,
+          "denominator": 30,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_benchmark_split",
+      "group": {
+        "method": "first_explicit_error",
+        "benchmark_split": "Dev"
+      },
+      "run_count": 20,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.05,
+          "numerator": 1.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.05263157894736842,
+          "numerator": 1.0,
+          "denominator": 19,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.05263157894736842,
+          "numerator": 1.0,
+          "denominator": 19,
+          "median": null
+        },
+        "step_distance": {
+          "value": 12.727272727272727,
+          "numerator": 140.0,
+          "denominator": 11,
+          "median": 1.0
+        },
+        "prediction_coverage": {
+          "value": 0.55,
+          "numerator": 11.0,
+          "denominator": 20,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.95,
+          "numerator": 19.0,
+          "denominator": 20,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.3157894736842105,
+          "numerator": 6.0,
+          "denominator": 19,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.3157894736842105,
+          "numerator": 6.0,
+          "denominator": 19,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.09090909090909091,
+          "numerator": 1.0,
+          "denominator": 11,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.09090909090909091,
+          "numerator": 1.0,
+          "denominator": 11,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.45,
+          "numerator": 9.0,
+          "denominator": 20,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_benchmark_split",
+      "group": {
+        "method": "first_explicit_error",
+        "benchmark_split": "Frozen Test"
+      },
+      "run_count": 10,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.2,
+          "numerator": 2.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.2,
+          "numerator": 2.0,
+          "denominator": 10,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.2,
+          "numerator": 2.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_distance": {
+          "value": 3.6,
+          "numerator": 18.0,
+          "denominator": 5,
+          "median": 3.0
+        },
+        "prediction_coverage": {
+          "value": 0.5,
+          "numerator": 5.0,
+          "denominator": 10,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.2,
+          "numerator": 2.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.2,
+          "numerator": 2.0,
+          "denominator": 10,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.4,
+          "numerator": 2.0,
+          "denominator": 5,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.4,
+          "numerator": 2.0,
+          "denominator": 5,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.5,
+          "numerator": 5.0,
+          "denominator": 10,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_benchmark_split",
+      "group": {
+        "method": "last_active_agent",
+        "benchmark_split": "Dev"
+      },
+      "run_count": 20,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.3,
+          "numerator": 6.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 19,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 19,
+          "median": null
+        },
+        "step_distance": {
+          "value": 15.421052631578947,
+          "numerator": 293.0,
+          "denominator": 19,
+          "median": 5.0
+        },
+        "prediction_coverage": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.95,
+          "numerator": 19.0,
+          "denominator": 20,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.05263157894736842,
+          "numerator": 1.0,
+          "denominator": 19,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.15789473684210525,
+          "numerator": 3.0,
+          "denominator": 19,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.3,
+          "numerator": 6.0,
+          "denominator": 20,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 19,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 20,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_benchmark_split",
+      "group": {
+        "method": "last_active_agent",
+        "benchmark_split": "Frozen Test"
+      },
+      "run_count": 10,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.4,
+          "numerator": 4.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_distance": {
+          "value": 14.7,
+          "numerator": 147.0,
+          "denominator": 10,
+          "median": 8.0
+        },
+        "prediction_coverage": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.4,
+          "numerator": 4.0,
+          "denominator": 10,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_benchmark_split",
+      "group": {
+        "method": "rule_based",
+        "benchmark_split": "Dev"
+      },
+      "run_count": 20,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.1,
+          "numerator": 2.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.05263157894736842,
+          "numerator": 1.0,
+          "denominator": 19,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.05263157894736842,
+          "numerator": 1.0,
+          "denominator": 19,
+          "median": null
+        },
+        "step_distance": {
+          "value": 9.789473684210526,
+          "numerator": 186.0,
+          "denominator": 19,
+          "median": 4.0
+        },
+        "prediction_coverage": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.95,
+          "numerator": 19.0,
+          "denominator": 20,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.2631578947368421,
+          "numerator": 5.0,
+          "denominator": 19,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.3684210526315789,
+          "numerator": 7.0,
+          "denominator": 19,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.1,
+          "numerator": 2.0,
+          "denominator": 20,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.05263157894736842,
+          "numerator": 1.0,
+          "denominator": 19,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 20,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_benchmark_split",
+      "group": {
+        "method": "rule_based",
+        "benchmark_split": "Frozen Test"
+      },
+      "run_count": 10,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.1,
+          "numerator": 1.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.2,
+          "numerator": 2.0,
+          "denominator": 10,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.1,
+          "numerator": 1.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_distance": {
+          "value": 6.7,
+          "numerator": 67.0,
+          "denominator": 10,
+          "median": 5.0
+        },
+        "prediction_coverage": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.2,
+          "numerator": 2.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.2,
+          "numerator": 2.0,
+          "denominator": 10,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.1,
+          "numerator": 1.0,
+          "denominator": 10,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.2,
+          "numerator": 2.0,
+          "denominator": 10,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_source_split",
+      "group": {
+        "method": "first_explicit_error",
+        "source_split": "Algorithm-Generated"
+      },
+      "run_count": 20,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.15,
+          "numerator": 3.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.15,
+          "numerator": 3.0,
+          "denominator": 20,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.15,
+          "numerator": 3.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_distance": {
+          "value": 1.5454545454545454,
+          "numerator": 17.0,
+          "denominator": 11,
+          "median": 1.0
+        },
+        "prediction_coverage": {
+          "value": 0.55,
+          "numerator": 11.0,
+          "denominator": 20,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.4,
+          "numerator": 8.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.4,
+          "numerator": 8.0,
+          "denominator": 20,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.2727272727272727,
+          "numerator": 3.0,
+          "denominator": 11,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.2727272727272727,
+          "numerator": 3.0,
+          "denominator": 11,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.45,
+          "numerator": 9.0,
+          "denominator": 20,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_source_split",
+      "group": {
+        "method": "first_explicit_error",
+        "source_split": "Hand-Crafted"
+      },
+      "run_count": 10,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "step_distance": {
+          "value": 28.2,
+          "numerator": 141.0,
+          "denominator": 5,
+          "median": 29.0
+        },
+        "prediction_coverage": {
+          "value": 0.5,
+          "numerator": 5.0,
+          "denominator": 10,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.9,
+          "numerator": 9.0,
+          "denominator": 10,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 5,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 5,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.5,
+          "numerator": 5.0,
+          "denominator": 10,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_source_split",
+      "group": {
+        "method": "last_active_agent",
+        "source_split": "Algorithm-Generated"
+      },
+      "run_count": 20,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.3,
+          "numerator": 6.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 20,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_distance": {
+          "value": 5.2,
+          "numerator": 104.0,
+          "denominator": 20,
+          "median": 5.0
+        },
+        "prediction_coverage": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.05,
+          "numerator": 1.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.1,
+          "numerator": 2.0,
+          "denominator": 20,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.3,
+          "numerator": 6.0,
+          "denominator": 20,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 20,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 20,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_source_split",
+      "group": {
+        "method": "last_active_agent",
+        "source_split": "Hand-Crafted"
+      },
+      "run_count": 10,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.4,
+          "numerator": 4.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "step_distance": {
+          "value": 37.333333333333336,
+          "numerator": 336.0,
+          "denominator": 9,
+          "median": 21.0
+        },
+        "prediction_coverage": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.9,
+          "numerator": 9.0,
+          "denominator": 10,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.1111111111111111,
+          "numerator": 1.0,
+          "denominator": 9,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.4,
+          "numerator": 4.0,
+          "denominator": 10,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_source_split",
+      "group": {
+        "method": "rule_based",
+        "source_split": "Algorithm-Generated"
+      },
+      "run_count": 20,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.15,
+          "numerator": 3.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.15,
+          "numerator": 3.0,
+          "denominator": 20,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.1,
+          "numerator": 2.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_distance": {
+          "value": 3.35,
+          "numerator": 67.0,
+          "denominator": 20,
+          "median": 3.5
+        },
+        "prediction_coverage": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 20.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.35,
+          "numerator": 7.0,
+          "denominator": 20,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.35,
+          "numerator": 7.0,
+          "denominator": 20,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.15,
+          "numerator": 3.0,
+          "denominator": 20,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.15,
+          "numerator": 3.0,
+          "denominator": 20,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 20,
+          "median": null
+        }
+      }
+    },
+    {
+      "grouping": "method_x_source_split",
+      "group": {
+        "method": "rule_based",
+        "source_split": "Hand-Crafted"
+      },
+      "run_count": 10,
+      "metrics": {
+        "agent_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "joint_exact_match": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "step_distance": {
+          "value": 20.666666666666668,
+          "numerator": 186.0,
+          "denominator": 9,
+          "median": 13.0
+        },
+        "prediction_coverage": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "agent_scorable": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_scorable": {
+          "value": 0.9,
+          "numerator": 9.0,
+          "denominator": 10,
+          "median": null
+        },
+        "provenance_guard": {
+          "value": 1.0,
+          "numerator": 10.0,
+          "denominator": 10,
+          "median": null
+        },
+        "step_within_1": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "step_within_2": {
+          "value": 0.2222222222222222,
+          "numerator": 2.0,
+          "denominator": 9,
+          "median": null
+        },
+        "selective_agent_accuracy": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        },
+        "selective_step_accuracy": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 9,
+          "median": null
+        },
+        "abstain_rate": {
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 10,
+          "median": null
+        }
+      }
+    }
+  ],
+  "confusion_matrix": [
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "behavioral_expert",
+      "predicted_agent": "validation_expert",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "corporatehistory_ipos_mondaycom_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "dataverification_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "gametheory_expert",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "gis_dataanalysis_expert",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "mesopotamian_number_systems_expert",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "statistics_expert",
+      "predicted_agent": "verification_expert",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "validation_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 2
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "vegan_food_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "verification_expert",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 2
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "verification_expert",
+      "predicted_agent": "verification_expert",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "assistant",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "assistant",
+      "predicted_agent": "filesurfer",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "orchestrator",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 2
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "websurfer",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "websurfer",
+      "predicted_agent": "filesurfer",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "websurfer",
+      "predicted_agent": "orchestrator (thought)",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "culinary_awards_expert",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "dataanalysis_expert",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "dataverification_expert",
+      "predicted_agent": "dataverification_expert",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "filmography_expert",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "musictheory_expert",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "verification_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "webserving_expert",
+      "predicted_agent": "webserving_expert",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "orchestrator",
+      "predicted_agent": "websurfer",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "websurfer",
+      "predicted_agent": "__ABSTAIN__",
+      "count": 1
+    },
+    {
+      "method": "first_explicit_error",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "websurfer",
+      "predicted_agent": "orchestrator (thought)",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "behavioral_expert",
+      "predicted_agent": "validation_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "corporatehistory_ipos_mondaycom_expert",
+      "predicted_agent": "corporatehistory_ipos_mondaycom_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "dataverification_expert",
+      "predicted_agent": "dataverification_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "gametheory_expert",
+      "predicted_agent": "verificationexpert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "gis_dataanalysis_expert",
+      "predicted_agent": "scientific_verification_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "mesopotamian_number_systems_expert",
+      "predicted_agent": "mesopotamian_number_systems_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "statistics_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "validation_expert",
+      "predicted_agent": "baseball_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "validation_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "vegan_food_expert",
+      "predicted_agent": "verification_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "verification_expert",
+      "predicted_agent": "dataanalysis_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "verification_expert",
+      "predicted_agent": "demographicdata_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "verification_expert",
+      "predicted_agent": "verification_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "assistant",
+      "predicted_agent": "orchestrator (termination condition)",
+      "count": 2
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "orchestrator",
+      "predicted_agent": "orchestrator (termination condition)",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "orchestrator",
+      "predicted_agent": "websurfer",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "websurfer",
+      "predicted_agent": "orchestrator (termination condition)",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "websurfer",
+      "predicted_agent": "websurfer",
+      "count": 2
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "culinary_awards_expert",
+      "predicted_agent": "culinary_awards_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "dataanalysis_expert",
+      "predicted_agent": "verification_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "dataverification_expert",
+      "predicted_agent": "dataverification_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "filmography_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "musictheory_expert",
+      "predicted_agent": "verification_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "verification_expert",
+      "predicted_agent": "grocery_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "webserving_expert",
+      "predicted_agent": "researchfunding_expert",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "orchestrator",
+      "predicted_agent": "orchestrator (termination condition)",
+      "count": 1
+    },
+    {
+      "method": "last_active_agent",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "websurfer",
+      "predicted_agent": "websurfer",
+      "count": 2
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "behavioral_expert",
+      "predicted_agent": "validation_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "corporatehistory_ipos_mondaycom_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "dataverification_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "gametheory_expert",
+      "predicted_agent": "verificationexpert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "gis_dataanalysis_expert",
+      "predicted_agent": "scientific_verification_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "mesopotamian_number_systems_expert",
+      "predicted_agent": "mesopotamian_number_systems_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "statistics_expert",
+      "predicted_agent": "verification_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "validation_expert",
+      "predicted_agent": "baseball_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "validation_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "vegan_food_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "verification_expert",
+      "predicted_agent": "dataanalysis_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "verification_expert",
+      "predicted_agent": "demographicdata_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "verification_expert",
+      "predicted_agent": "verification_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "assistant",
+      "predicted_agent": "orchestrator (thought)",
+      "count": 2
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "orchestrator",
+      "predicted_agent": "orchestrator (termination condition)",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "orchestrator",
+      "predicted_agent": "orchestrator (thought)",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Dev",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "websurfer",
+      "predicted_agent": "orchestrator (thought)",
+      "count": 3
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "culinary_awards_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "dataanalysis_expert",
+      "predicted_agent": "verification_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "dataverification_expert",
+      "predicted_agent": "dataverification_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "filmography_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "musictheory_expert",
+      "predicted_agent": "verification_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "verification_expert",
+      "predicted_agent": "computer_terminal",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Algorithm-Generated",
+      "ground_truth_agent": "webserving_expert",
+      "predicted_agent": "researchfunding_expert",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "orchestrator",
+      "predicted_agent": "websurfer",
+      "count": 1
+    },
+    {
+      "method": "rule_based",
+      "benchmark_split": "Frozen Test",
+      "source_split": "Hand-Crafted",
+      "ground_truth_agent": "websurfer",
+      "predicted_agent": "orchestrator (thought)",
+      "count": 2
+    }
+  ]
+}

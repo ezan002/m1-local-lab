@@ -1,0 +1,53 @@
+{
+  "protocol_version": "attribution-eval-v1",
+  "benchmark_version": "who-when-benchmark-v1",
+  "dataset_name": "m1-local-lab-who-when-benchmark-v1",
+  "experiment_name": "m1-local-lab-attribution-benchmark-v1",
+  "baseline_version": "deterministic-baseline-v1",
+  "baseline_source_commit": "da3ef193bdd73474eec5191f1e267ee163c308a7",
+  "methods": [
+    "last_active_agent",
+    "first_explicit_error",
+    "rule_based"
+  ],
+  "source": {
+    "dataset": "Kevin355/Who_and_When",
+    "dataset_revision": "59b9fcba1aaed7bbf206b5f4d3c68b8face2f49c",
+    "repository": "mingyin1/Agents_Failure_Attribution",
+    "repository_revision": "b2bae5c5b06d681d04ea5e9b63b7a30525c04925",
+    "license_policy": "local research use only; redistribution not authorized"
+  },
+  "selection": {
+    "seed": "m1-local-lab-attribution-benchmark-v1",
+    "algorithm": "sha256(seed + source_split + original_case_id), ascending",
+    "sample_counts": {
+      "Hand-Crafted": 10,
+      "Algorithm-Generated": 20
+    },
+    "dev_counts": {
+      "Hand-Crafted": 7,
+      "Algorithm-Generated": 13
+    },
+    "frozen_test_counts": {
+      "Hand-Crafted": 3,
+      "Algorithm-Generated": 7
+    },
+    "split_algorithm": "sha256(seed + ':benchmark-split:' + source_split + original_case_id), ascending; first dev_count is Dev"
+  },
+  "normalization": {
+    "agent": "Unicode NFKC, trim, collapse whitespace, casefold; no semantic aliasing",
+    "step": "strict base-10 integer string; Who&When history index is zero-based; no offset search",
+    "unknown_step": "unscorable"
+  },
+  "abstention": {
+    "prediction_coverage": 0,
+    "scorable_overall_exact_match": 0,
+    "step_distance": null,
+    "selective_denominator": "exclude abstentions",
+    "overall_denominator": "include scorable abstentions"
+  },
+  "truncation": {
+    "agent_label_may_remain_scorable": true,
+    "step_metrics_excluded_when_decisive_step_not_retained": true
+  }
+}

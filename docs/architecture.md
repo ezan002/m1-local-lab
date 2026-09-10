@@ -1,5 +1,23 @@
 # 架构与执行语义
 
+## Attribution benchmark v1 旁路
+
+`attribution_protocol.py` 固化版本、revision、选择/划分、Agent/step 规范化与 abstain/truncation 分母；`attribution_benchmark.py` 在现有 `external_datasets.py` 与未修改的 `attribution.py` 之后执行 30×3 离线矩阵、分组聚合、confusion matrix 和 Phoenix 公共 API 写入。它是独立评估旁路，不进入 AgentRuntime、LangGraph state/checkpoint 或网页 API，LangGraph 仍是在线任务的唯一调度器。
+
+```text
+pinned Who&When parquet -> schema-only selection -> safe manifest + ignored selected JSON
+                                                        |
+                                             label-free AttributionInput
+                                                        |
+                   frozen deterministic-baseline-v1 (3 methods, no model)
+                                                        |
+                       post-prediction Ground Truth join -> attribution-eval-v1
+                                                        |
+                        safe aggregate + Phoenix Dataset/Experiment
+```
+
+Dataset input 通过递归 guard 禁止 evaluator-only labels；Ground Truth 只在 Dataset output/evaluator 侧。跨来源重复 ID 以 source split 形成稳定命名空间。Agent 只做 NFKC/空白/case 规范化，不做标签导出的语义 alias；Who&When step 固定为 0-based，不搜索偏移。Frozen Test 不用于调参。完整契约见 [attribution-benchmark-v1.md](attribution-benchmark-v1.md)。
+
 ## 错误归因只读展示层
 
 `attribution_read_model.py` 位于离线 predictor/evaluator 和 Web 之间，不进入 `AgentRuntime`、LangGraph State 或 checkpoint 路径：

@@ -1,5 +1,9 @@
 # M1 Local Lab
 
+## Who&When 归因基准 v1
+
+当前仓库已固化 `attribution-eval-v1`：固定 revision 的 Who&When 30 样本（Hand-Crafted 10、Algorithm-Generated 20），固定 Dev/Frozen Test 20/10，以及三种既有零费用确定性基线，共 90 次离线预测。详细协议、分母语义、Phoenix 结果和复现命令见 [docs/attribution-benchmark-v1.md](docs/attribution-benchmark-v1.md)；安全聚合结果见 [docs/results/attribution-benchmark-v1-summary.json](docs/results/attribution-benchmark-v1-summary.json)。该路径不调用模型、不运行真实 WebSurfer，也不改变 LangGraph 或现有 Agent。
+
 这是一个仅监听本机回环地址的单用户 MVP：LangGraph 负责规划、调度、重规划和持久化；微软官方 AutoGen `MultimodalWebSurfer` 使用真实 Playwright Chromium 充当浏览 worker；Phoenix 独立保存可观测轨迹；FastAPI 页面通过 SSE 展示运行与 checkpoint。
 
 它不是 Magentic-One 的逐行复刻，也不会执行模型生成的代码。

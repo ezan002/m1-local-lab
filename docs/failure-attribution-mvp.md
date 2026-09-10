@@ -1,5 +1,7 @@
 # 离线错误归因后端 MVP
 
+> 2026-09-10：三样本 smoke 的算法与边界保持不变；其上新增的固定 30 样本评估协议见 [attribution-benchmark-v1.md](attribution-benchmark-v1.md)。三种 baseline 仍是同一冻结实现，新增层只负责规范化、分母、分组、manifest 和 Phoenix benchmark 写入。
+
 > 2026-09-10 更新：后端算法和评价边界保持不变；本文件末尾原有“没有 UI”限制已由只读可视化阶段解除。页面实现与新限制见 [failure-attribution-ui.md](failure-attribution-ui.md)。
 
 记录日期：2026-09-02（America/New_York）。本阶段只验证三条既有外部历史样本的数据流、隔离边界、指标和 Phoenix 集成，不证明归因算法有效性。
