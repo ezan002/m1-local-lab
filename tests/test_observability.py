@@ -12,6 +12,123 @@ from m1_local.observability import Observability, safe_json_summary
 from m1_local.runtime import AgentRuntime
 
 
+def test_export_boundary_hides_sdk_exception_and_preserves_parentage(settings):
+    import httpx
+    from openai import AuthenticationError, OpenAI
+    from openinference.instrumentation.openai import OpenAIInstrumentor
+    from m1_local.telemetry_export import SanitizingExporter
+
+    secret = "synthetic-secret-never-export"
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(SanitizingExporter(exporter, secrets=(secret,))))
+    observability = Observability(settings)
+    observability.configure_provider(provider)
+    instrumentor = OpenAIInstrumentor()
+    instrumentor.instrument(tracer_provider=provider, config=observability.trace_config)
+    client = OpenAI(
+        api_key="offline-fixture", max_retries=0,
+        http_client=httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(
+            401, json={"error": {"message": "api_key=" + secret, "type": "invalid_request_error"}},
+        ))),
+    )
+    try:
+        with provider.get_tracer("test").start_as_current_span("parent") as parent:
+            parent.set_attribute("input.value", '{"api_key": "quoted-fixture-value"}')
+            parent.set_attribute("output.value", safe_json_summary({"task_preview": '{"api_key": "nested-fixture-value"}'}))
+            parent.set_attribute("llm.token_count.total", 17)
+            with pytest.raises(AuthenticationError):
+                client.chat.completions.create(model="offline-fixture", messages=[{"role": "user", "content": "fixture"}])
+        spans = exporter.get_finished_spans()
+        root = next(span for span in spans if span.name == "parent")
+        child = next(span for span in spans if span.parent is not None)
+        assert child.parent.span_id == root.context.span_id
+        assert child.context.trace_id == root.context.trace_id
+        assert root.attributes["llm.token_count.total"] == 17
+        assert child.status.status_code.name == "ERROR"
+        assert child.events and any("exception.type" in event.attributes for event in child.events)
+        rendered = "\n".join(span.to_json() for span in spans)
+        assert secret not in rendered
+        assert "quoted-fixture-value" not in rendered
+        assert "nested-fixture-value" not in rendered
+    finally:
+        client.close()
+        instrumentor.uninstrument()
+        provider.shutdown()
+
+
+def test_export_boundary_covers_resource_links_and_event_names():
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.trace import Link, SpanContext, TraceFlags
+    from m1_local.telemetry_export import SanitizingExporter
+
+    secret = "configured-fixture-value"
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider(resource=Resource({"service.name": secret}))
+    provider.add_span_processor(SimpleSpanProcessor(SanitizingExporter(exporter, secrets=(secret,))))
+    try:
+        link = Link(SpanContext(123, 456, False, TraceFlags(1)), attributes={"label": secret})
+        with provider.get_tracer("test").start_as_current_span("fixture", links=[link]) as span:
+            span.add_event(secret, {"detail": secret})
+        exported = exporter.get_finished_spans()[0]
+        assert secret not in exported.to_json()
+        assert exported.links[0].context.span_id == 456
+    finally:
+        provider.shutdown()
+
+
+def test_initialize_replaces_phoenix_exporter_before_instrumentation(settings, monkeypatch):
+    import phoenix.otel
+    from openinference.instrumentation.langchain import LangChainInstrumentor
+    from openinference.instrumentation.openai import OpenAIInstrumentor
+
+    exporter = InMemorySpanExporter()
+    monkeypatch.setattr(phoenix.otel, "HTTPSpanExporter", lambda **kwargs: exporter)
+    monkeypatch.setattr(LangChainInstrumentor, "instrument", lambda *args, **kwargs: None)
+    monkeypatch.setattr(OpenAIInstrumentor, "instrument", lambda *args, **kwargs: None)
+    obs = Observability(settings)
+    monkeypatch.setattr(obs, "check_phoenix", lambda: None)
+    global_provider = __import__("opentelemetry.trace", fromlist=["get_tracer_provider"]).get_tracer_provider()
+    try:
+        obs.initialize()
+        assert obs.warning is None
+        with obs.span("fixture", input_summary={"task": '{"api_key": "export-fixture"}'}):
+            pass
+        obs.flush()
+        spans = exporter.get_finished_spans()
+        assert len(spans) == 1
+        assert "export-fixture" not in spans[0].to_json()
+        assert spans[0].resource.attributes["openinference.project.name"] == settings.phoenix_project_name
+        assert __import__("opentelemetry.trace", fromlist=["get_tracer_provider"]).get_tracer_provider() is global_provider
+    finally:
+        obs.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_run_flush_happens_after_root_span_ends(settings):
+    from opentelemetry.sdk.trace import SpanProcessor
+
+    actions = []
+
+    class Recorder(SpanProcessor):
+        def on_end(self, span):
+            actions.append(span.name)
+
+        def force_flush(self, timeout_millis=30000):
+            actions.append("flush")
+            return True
+
+    provider = TracerProvider()
+    provider.add_span_processor(Recorder())
+    runtime = AgentRuntime(settings, RuleBasedGateway(), enable_tracing=False)
+    runtime.observability.configure_provider(provider)
+    try:
+        await runtime.create_run("Draft code")
+        assert actions[-2:] == ["m1.run", "flush"]
+    finally:
+        await runtime.shutdown()
+
+
 def test_safe_summary_redacts_secret_keys_and_common_token_shapes() -> None:
     summary = safe_json_summary({
         "api_key": "never-export-this",

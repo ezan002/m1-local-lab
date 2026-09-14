@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .external_datasets import ExternalTraceRecord
+from .external_export import EXPORT_VIEW_VERSION, dataset_export_view, safe_export_example, safe_export_payload
 
 
 DATASET_NAME = "m1-local-lab-external-trace-smoke"
@@ -29,6 +30,7 @@ def ensure_phoenix_dataset(
     records: Sequence[ExternalTraceRecord],
     *,
     name: str = DATASET_NAME,
+    secrets: Sequence[str] = (),
 ) -> tuple[Any, bool]:
     if not records or len(records) > 5:
         raise ValueError("smoke dataset must contain between 1 and 5 records")
@@ -37,7 +39,7 @@ def ensure_phoenix_dataset(
         raise ValueError("dataset_case_id values must be unique")
     # Phoenix 11.x does not accept caller-supplied example IDs. Keep the stable
     # cross-version key inside input/metadata and use it for idempotency checks.
-    examples = [record.phoenix_example() for record in records]
+    examples = [safe_export_example(record.phoenix_example(), secrets=secrets) for record in records]
     existing = next((item for item in client.datasets.list() if _dataset_name(item) == name), None)
     if existing is None:
         return (
@@ -72,8 +74,11 @@ def run_offline_experiment(
     validation_runs: Mapping[str, Mapping[str, Any]],
     *,
     experiment_name: str = EXPERIMENT_NAME,
+    secrets: Sequence[str] = (),
 ) -> Any:
     """Log only precomputed RuleBasedGateway validations against imported examples."""
+    dataset = dataset_export_view(dataset, secrets=secrets)
+    validation_runs = safe_export_payload(dict(validation_runs), secrets=secrets)
 
     def task(input: Mapping[str, Any], expected: Mapping[str, Any]) -> dict[str, Any]:
         case_id = str(input["dataset_case_id"])
@@ -113,6 +118,7 @@ def run_offline_experiment(
             "external_task_executed": False,
             "gateway": "RuleBasedGateway",
             "paid_model_calls": 0,
+            "export_view_version": EXPORT_VIEW_VERSION,
         },
         print_summary=False,
         repetitions=1,

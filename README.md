@@ -1,5 +1,7 @@
 # M1 Local Lab
 
+工程审查、导师部署验证及尚未解决的边界见 [完整审查报告](docs/full-project-audit-optimization.md)。
+
 ## Who&When 归因基准 v1
 
 当前仓库已固化 `attribution-eval-v1`：固定 revision 的 Who&When 30 样本（Hand-Crafted 10、Algorithm-Generated 20），固定 Dev/Frozen Test 20/10，以及三种既有零费用确定性基线，共 90 次离线预测。详细协议、分母语义、Phoenix 结果和复现命令见 [docs/attribution-benchmark-v1.md](docs/attribution-benchmark-v1.md)；安全聚合结果见 [docs/results/attribution-benchmark-v1-summary.json](docs/results/attribution-benchmark-v1-summary.json)。该路径不调用模型、不运行真实 WebSurfer，也不改变 LangGraph 或现有 Agent。
@@ -10,10 +12,10 @@
 
 ## 从准备好的 Windows 电脑开始
 
-要求 Windows 11 x64 与 Python 3.11。本机基准解释器为：
+要求 Windows 11 x64 与 Python 3.11。先确认 Python Launcher 能找到对应解释器：
 
 ```powershell
-& 'C:/Users/wangy/AppData/Local/Programs/Python/Python311/python.exe' --version
+py -3.11 --version
 ```
 
 在项目根目录执行安装脚本。若本机 PowerShell 策略不允许直接运行 `.ps1`，下面的 `Bypass` 只影响这个新进程，不修改全局策略：
@@ -23,6 +25,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 ```
 
 安装会创建相互隔离的 `.venv` 与 `.venv-phoenix`，安装锁定依赖、项目 editable 包和与当前 Playwright 配套的 Chromium，并分别运行 `pip check`。不需要 ChromeDriver。
+
+若 `PIP_NO_INDEX` 禁用索引，安装脚本会在调用 Python 前给出明确错误，不会覆盖该设置。只有操作者确认允许下载后，才应在安装子进程中显式启用索引；不会修改用户或系统级环境变量。导师从 clone 到启动网页的完整 PowerShell 命令见上述报告。
+
+没有 Python Launcher 时尝试 PATH 中的 `python.exe`；也可给安装脚本传 `-PythonExe 'C:\Python311\python.exe'`（替换为实际路径）。脚本校验 Python 3.11 x64，任一安装命令失败就停止，保留已有环境。部署需保留完整 checkout 及 `web/`，目前不支持仅复制 wheel。依赖及 Chromium 首次安装需要网络。
 
 只在 `.env` 不存在时复制模板，然后在本机编辑器中填写 Key；不要把 Key 粘贴到聊天、日志或截图里：
 
@@ -64,7 +70,11 @@ if (-not (Test-Path -LiteralPath .env)) { Copy-Item .env.example .env }
 & '.\scripts\stop-phoenix.ps1'
 ```
 
-脚本会检查端口；停止脚本只接受本项目 PID 文件且核对可执行文件路径，不会结束其他 Python 或 Chrome 进程。
+项目启动入口 `scripts/serve_phoenix.py` 对锁定的 Phoenix 11.35.0 关闭未使用的 gRPC，保留回环 HTTP/OTLP 写入；版本或接口不符时拒绝启动。请使用项目启动脚本，直接运行 `phoenix serve` 会绕过该限制。Phoenix 自带启动横幅仍会列出默认 gRPC 地址，该静态文字不代表存在监听。
+
+停止脚本核对解释器、启动脚本、PID 和启动时间后只结束该进程树。旧版本入口启动且没有所有权回执的进程会被拒绝停止，应从原终端退出。
+
+应用对 metadata/checkpoint 两个 SQLite 路径持有进程生命周期锁；另一个 API/CLI 无法启动同一数据库的 runtime，也不会把活跃运行标为 interrupted。正常退出或进程终止后操作系统释放锁。API 运行期间请从网页查看历史；使用同库 CLI 前先停止 API。不要手工删除 `.owner.lock` 文件。
 
 ## 网页控制台
 
@@ -135,11 +145,16 @@ JSONL 每行包含 `case_id`、`task`、可选 `allowed_files` 和 `metadata`。
 
 ## 数据与安全边界
 
-- 服务默认只绑定 `127.0.0.1`，API 校验 Host、Origin 和 CSRF；不建立公网隧道。
-- WebSurfer 只允许配置白名单中的公开站点，阻止本机、内网、`file://`、登录、上传、支付和下载执行；网页文字按不可信数据处理。
+外部历史的 Phoenix 写入使用独立 `safe-export-v1` 展示副本，冻结 adapter、predictor、Ground Truth、manifest 和本地结果保持不变。SDK 实验重用旧 Dataset 时也先复制并脱敏；敏感内容出现在标签或身份字段时拒绝导出。该机制处理凭据形态和显式配置密钥，不承诺识别全部个人信息，也不会清理已有数据库内容。
+
+隔离的项目 Chromium 验收已能运行。当前 Phoenix 11.35.0 的 GitHub 星标组件仍会发起外部请求；在阻止外部请求的严格验收中产生页面错误，整体网页验收为 PARTIAL，详情见审查报告。
+
+- 应用和 Phoenix HTTP 默认绑定 `127.0.0.1`，API 校验 Host、Origin 和 CSRF；不建立公网隧道。Phoenix 11.35 的 gRPC 仍绑定 `[::]:4317`，现有脚本尚未解决此额外监听边界，不能据 HTTP 地址宣称整个服务仅回环。
+- 同一组运行数据库只能由一个 runtime 进程使用。网页服务运行期间不要同时使用 CLI run/history/resume/replay/fork/dataset；第二个 runtime 会把已有活跃记录误判为中断，目前没有跨进程租约。
+- WebSurfer 对导航站点、公开 IP 和 URL scheme 做代码校验；公开静态资源可来自非导航白名单主机。登录、上传、支付等主要由提示词约束，尚无完整 HTTP 方法/表单动作强制隔离；网页文字按不可信数据处理。
 - 文件 worker 只读显式允许目录下的 `.txt`、`.md`、`.csv`，并检查解析后的真实路径和大小。
 - coder 只写 `unexecuted_code` 产物，`ENABLE_CODE_EXECUTION=false` 是强制默认值。
-- `.env`、SQLite 数据库、浏览器调试目录、截图和 PID/日志都被 `.gitignore` 排除。Phoenix 不接收模型 Key。
+- `.env`、SQLite 数据库、浏览器调试目录、截图和 PID/日志都被 `.gitignore` 排除。应用 OTel 导出层隐藏模型输入/输出及 SDK 异常正文，并脱敏配置密钥和常见凭据形态；本地 checkpoint、产物及外部 Dataset 内容不具备全面脱敏保证。
 - replay/恢复可能重新访问网页并再次产生模型费用。项目不承诺 exactly-once，也不恢复 DOM、JS 内存、登录态、表单或外部副作用。
 
 ## 排错

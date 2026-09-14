@@ -316,3 +316,15 @@ def test_phoenix_logging_creates_three_by_three_matrix_and_namespaced_evaluation
     evaluation_metadata = client.experiments.evaluations[0]["metadata"]
     assert evaluation_metadata["agent_scorable"] is True
     assert evaluation_metadata["step_scorable"] is True
+
+
+def test_phoenix_prediction_export_redacts_reason_without_mutating_suite() -> None:
+    suite = run_attribution_suite([build_attribution_views(_record())])
+    prediction = suite.predictions[0].model_copy(update={"reason": 'password="first SUITE_EXPORT_TAIL"'})
+    suite = suite.model_copy(update={"predictions": (prediction, *suite.predictions[1:])})
+    before = suite.model_dump()
+    dataset = _Dataset("dataset", "version", [_Example("example", {"dataset_case_id": prediction.dataset_case_id})])
+    client = _FakeClient()
+    log_suite_to_phoenix(client, dataset, suite)
+    assert "SUITE_EXPORT_TAIL" not in str(client.experiments.runs)
+    assert suite.model_dump() == before

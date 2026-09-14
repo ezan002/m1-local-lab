@@ -102,9 +102,7 @@ def _ensure_phoenix() -> subprocess.Popen[str] | None:
     process = subprocess.Popen(
         [
             str(PROJECT_ROOT / ".venv-phoenix" / "Scripts" / "python.exe"),
-            "-m",
-            "phoenix.server.main",
-            "serve",
+            str(PROJECT_ROOT / "scripts" / "serve_phoenix.py"),
         ],
         cwd=PROJECT_ROOT,
         env=environment,

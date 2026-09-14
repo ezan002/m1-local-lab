@@ -102,8 +102,9 @@ async def main() -> int:
     records = load_records()
     validation_runs = await local_rule_based_validation(records)
     client = Client(base_url="http://127.0.0.1:6006")
-    dataset, created = ensure_phoenix_dataset(client, records)
-    experiment = run_offline_experiment(client, dataset, validation_runs)
+    secrets = (Settings().openai_api_key.get_secret_value(),)
+    dataset, created = ensure_phoenix_dataset(client, records, secrets=secrets)
+    experiment = run_offline_experiment(client, dataset, validation_runs, secrets=secrets)
     experiment_id = (
         str(experiment.get("experiment_id", ""))
         if isinstance(experiment, dict)

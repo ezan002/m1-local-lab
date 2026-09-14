@@ -1,4 +1,5 @@
 from __future__ import annotations
+from m1_local.config import Settings
 
 import json
 import socket
@@ -131,14 +132,15 @@ def main() -> int:
         suite = run_attribution_suite(views)
 
         client = Client(base_url=PHOENIX_URL)
-        dataset, dataset_created = ensure_phoenix_dataset(client, records, name=DATASET_NAME)
+        secrets = (Settings().openai_api_key.get_secret_value(),)
+        dataset, dataset_created = ensure_phoenix_dataset(client, records, name=DATASET_NAME, secrets=secrets)
         examples = list(_value(dataset, "examples") or ())
         case_ids = [str(_value(example, "input")["dataset_case_id"]) for example in examples]
         if len(examples) != 3 or len(set(case_ids)) != 3:
             raise RuntimeError("Phoenix dataset must contain exactly three unique examples")
 
         phoenix_result = log_suite_to_phoenix(
-            client, dataset, suite, experiment_name=EXPERIMENT_NAME
+            client, dataset, suite, experiment_name=EXPERIMENT_NAME, secrets=secrets
         )
         stored = client.experiments.get_experiment(experiment_id=phoenix_result.experiment_id)
         task_runs = list(stored["task_runs"])

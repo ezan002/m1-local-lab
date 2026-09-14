@@ -110,6 +110,42 @@ def test_manifest_hash_tampering_is_rejected(tmp_path: Path) -> None:
         load_manifest(path, protocol_path=PROTOCOL_PATH)
 
 
+@pytest.mark.parametrize("mutation", ["all_dev", "swapped_split", "selection_hash", "case_id"])
+def test_manifest_rejects_inconsistent_cases_even_with_recomputed_hash(tmp_path, mutation):
+    payload = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    if mutation == "all_dev":
+        for case in payload["cases"]:
+            case["benchmark_split"] = "Dev"
+    elif mutation == "swapped_split":
+        dev = next(case for case in payload["cases"] if case["benchmark_split"] == "Dev")
+        frozen = next(case for case in payload["cases"] if case["benchmark_split"] == "Frozen Test" and case["source_split"] == dev["source_split"])
+        dev["benchmark_split"], frozen["benchmark_split"] = frozen["benchmark_split"], dev["benchmark_split"]
+    elif mutation == "selection_hash":
+        payload["cases"][0]["selection_sha256"] = "0" * 64
+    else:
+        payload["cases"][0]["dataset_case_id"] = "unrelated-case"
+    payload.pop("manifest_sha256")
+    payload["manifest_sha256"] = sha256_json(payload)
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_manifest(path, protocol_path=PROTOCOL_PATH)
+
+
+@pytest.mark.parametrize("mutation", ["case_id", "source", "revision", "source_case_id", "source_split"])
+def test_benchmark_rejects_incorrect_provenance_join(mutation):
+    case, record, inference, labels = _record(0)
+    if mutation == "case_id":
+        case = case.model_copy(update={"dataset_case_id": "unrelated"})
+    elif mutation == "source_split":
+        case = case.model_copy(update={"source_split": "Algorithm-Generated"})
+    else:
+        labels = labels.model_copy(update={mutation: "TraceElephant" if mutation == "source" else "unrelated"})
+    prediction = AttributionPrediction(method="rule_based", dataset_case_id=inference.dataset_case_id, status="abstained", reason="fixture", confidence=0)
+    with pytest.raises(ValueError, match="mismatch"):
+        evaluate_benchmark_prediction(case, inference, labels, prediction)
+
+
 def _record(index: int, *, source_split: str = "Hand-Crafted", decisive_step: str = "1", truncated: bool = False):
     case_id = f"who-and-when:{source_split.casefold()}:{index}"
     record = ExternalTraceRecord(
@@ -270,3 +306,17 @@ def test_full_matrix_is_30_by_3_and_phoenix_payloads_remain_label_free() -> None
     assert logged["evaluation_count"] == 90 * len(EVALUATION_NAMES)
     assert all("responsible_agent" not in str(item["output"]) for item in client.experiments.runs)
     assert all(item["name"].startswith("attribution.") for item in client.experiments.evaluations)
+
+
+def test_benchmark_prediction_export_is_separate_from_frozen_result() -> None:
+    records = [_record(index, source_split="Hand-Crafted" if index < 10 else "Algorithm-Generated") for index in range(30)]
+    result = run_benchmark(records)
+    prediction = result.predictions[0].model_copy(update={"reason": 'password="first BENCHMARK_EXPORT_TAIL"'})
+    result = result.model_copy(update={"predictions": (prediction, *result.predictions[1:])})
+    before = result.model_dump()
+    dataset = _Dataset("dataset", "version", [_Example(f"example-{index}", {"dataset_case_id": case.dataset_case_id}) for index, (case, *_rest) in enumerate(records)])
+    client = _Client()
+    manifest = BenchmarkManifest.model_validate(json.loads(MANIFEST_PATH.read_text(encoding="utf-8")))
+    log_benchmark_to_phoenix(client, dataset, result, manifest=manifest)
+    assert "BENCHMARK_EXPORT_TAIL" not in str(client.experiments.runs)
+    assert result.model_dump() == before

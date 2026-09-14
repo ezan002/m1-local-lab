@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import pytest
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -8,6 +9,44 @@ from fastapi.testclient import TestClient
 from m1_local.api import create_app
 from m1_local.models import RuleBasedGateway
 from m1_local.runtime import AgentRuntime
+
+
+@pytest.mark.parametrize("task", [" ", "\t\n"])
+def test_blank_task_is_validation_error_without_creating_run(settings, task):
+    runtime = AgentRuntime(settings, RuleBasedGateway(), enable_tracing=False)
+    with TestClient(create_app(settings, runtime), base_url="http://127.0.0.1:8000") as client:
+        token = client.get("/api/session").json()["csrf_token"]
+        response = client.post("/api/runs", headers={"x-m1-csrf": token}, json={"task": task})
+        assert response.status_code == 422
+        assert runtime.store.list_runs() == []
+
+
+@pytest.mark.parametrize("changes", [{"plan": "wrong type"}, {"plan": [1]}, {"worker_instruction": []}])
+def test_fork_values_are_typed_before_checkpoint_write(settings, changes):
+    runtime = AgentRuntime(settings, RuleBasedGateway(), enable_tracing=False)
+    with TestClient(create_app(settings, runtime), base_url="http://127.0.0.1:8000") as client:
+        token = client.get("/api/session").json()["csrf_token"]
+        response = client.post("/api/runs/missing/fork", headers={"x-m1-csrf": token}, json={"checkpoint_id": "checkpoint", "changes": changes})
+        assert response.status_code == 422
+
+
+@pytest.mark.parametrize("suffix,headers", [
+    ("events?last_event_id=-1", {}), ("events-log?after=-1", {}),
+    ("events", {"Last-Event-ID": "not-an-integer"}),
+    ("events", {"Last-Event-ID": str(2**63)}),
+])
+def test_event_cursor_rejects_invalid_or_sqlite_overflow_values(settings, suffix, headers):
+    runtime = AgentRuntime(settings, RuleBasedGateway(), enable_tracing=False)
+    with TestClient(create_app(settings, runtime), base_url="http://127.0.0.1:8000") as client:
+        assert client.get(f"/api/runs/missing/{suffix}", headers=headers).status_code == 422
+
+
+def test_ipv6_loopback_host_and_origin(settings):
+    settings = settings.model_copy(update={"app_host": "::1"})
+    runtime = AgentRuntime(settings, RuleBasedGateway(), enable_tracing=False)
+    # Starlette's TestClient URL parser cannot parse IPv6 netlocs; send the wire headers.
+    with TestClient(create_app(settings, runtime), base_url="http://127.0.0.1:8000") as client:
+        assert client.get("/api/session", headers={"Host": "[::1]:8000", "Origin": "http://[::1]:8000"}).status_code == 200
 
 
 def wait_for_status(client: TestClient, run_id: str, wanted: set[str], timeout: float = 3) -> dict:
@@ -20,10 +59,11 @@ def wait_for_status(client: TestClient, run_id: str, wanted: set[str], timeout: 
     raise AssertionError(f"run {run_id} did not reach {wanted}")
 
 
-def test_local_host_origin_csrf_and_run_api(settings):
+def test_local_host_origin_csrf_and_run_api(settings, monkeypatch):
     allowed = Path(settings.allowed_file_dirs[0]) / "api.csv"
     allowed.write_text("name,value\napi,1\n", encoding="utf-8")
     runtime = AgentRuntime(settings, RuleBasedGateway(), enable_tracing=False)
+    monkeypatch.setattr(runtime.observability, "check_phoenix", lambda: None)
     app = create_app(settings, runtime)
 
     with TestClient(app, base_url="http://127.0.0.1:8000") as client:
@@ -128,7 +168,7 @@ def test_control_endpoints_follow_runtime_status_and_checkpoint_rules(settings):
             f"/api/runs/{run_id}/fork", headers=headers,
             json={"checkpoint_id": nonterminal["checkpoint_id"], "changes": {"task": "replace"}},
         )
-        assert invalid.status_code == 409
+        assert invalid.status_code == 422
 
         replayed = client.post(
             f"/api/runs/{run_id}/replay", headers=headers,

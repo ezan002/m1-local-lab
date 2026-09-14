@@ -1,5 +1,7 @@
 # Attribution benchmark protocol v1
 
+2026-09-12 审查澄清（不修改协议或结果）：Frozen Test 的基线结果已经被查看，不能描述为从未查看的严格盲测集。`expected_answer` 是 predictor 可以使用的任务标准答案；只在 evaluator 使用的归因标签是 responsible agent、decisive step、failure reason。下文“未截断”仅指未删除历史步骤：原始 30/30 个样本共有 297 个历史字符串超过 adapter 的 1000 字符限制，内容另有容器深度/条目裁剪，不能据此声称内容无损。
+
 记录日期：2026-09-10（America/New_York）。结论：PASS。当前版本把 Who&When 30 样本、三种既有确定性基线、指标分母和 Phoenix 写入契约固化为 `attribution-eval-v1`，没有修改归因算法、LangGraph、Agent、API 或网页。
 
 ## 固定来源与许可边界
@@ -27,7 +29,7 @@ SHA256("m1-local-lab-attribution-benchmark-v1" + source_split + original_case_id
 
 每个 source split 按键升序，取 Hand-Crafted 10 条、Algorithm-Generated 20 条。Dev/Frozen Test 使用独立 domain-separated hash 排序：Hand-Crafted 7/3、Algorithm-Generated 13/7，合计 Dev 20、Frozen Test 10。跨 source split 重复的原始问题 ID 不被错误剔除，稳定 ID 中加入 source split。越界或未保留的 step 标签也不用于选择过滤，而是在评价时标为 unscorable。
 
-本次 schema exclusion 为 0。30 条中没有 trace 被 adapter 截断；1 条 Hand-Crafted 的决定性 step 不在其历史范围内，因此 agent 仍可评分，而 step exact、±1、±2、joint、distance 对三个方法都排除分母。受控 manifest 只含版本、种子、选择/划分 hash、原始与稳定 ID、行号、payload hash 和截断元数据，不含 question、history、答案或失败文本。
+本次 schema exclusion 为 0。30 条中没有历史步骤被 adapter 删除（内容仍有裁剪）；1 条 Hand-Crafted 的决定性 step 不在其历史范围内，因此 agent 仍可评分，而 step exact、±1、±2、joint、distance 对三个方法都排除分母。受控 manifest 只含版本、种子、选择/划分 hash、原始与稳定 ID、行号、payload hash 和截断元数据，不含 question、history、答案或失败文本。
 
 ## 冻结基线与隔离
 
@@ -72,7 +74,7 @@ Agent 比较只做 Unicode NFKC、首尾 trim、连续空白折叠和 casefold�
 
 Confusion matrix 按 method、benchmark split、source split、ground-truth canonical agent、predicted canonical agent 计数；abstain 使用独立的 `__ABSTAIN__` 桶，不混入任何 Agent。详细 CSV 位于被忽略的 `data/reports/attribution-benchmark-v1/confusion_matrix.csv`，安全聚合副本在上述 tracked JSON 中。
 
-这些结果只描述三种未调参的简单确定性基线，不能证明归因方法有效，也不能与论文中的 LLM 方法结果直接比较。Frozen Test 仅运行并报告冻结基线；后续开发只能用 Dev 调试。
+这些结果只描述三种未调参的简单确定性基线，不能证明归因方法有效，也不能与论文中的 LLM 方法结果直接比较。Frozen Test 仅运行并报告冻结基线，结果已被查看；后续开发只能用 Dev 调试。严格独立的盲评需要另行确认新的评估设计，不能改写本版历史。
 
 ## Phoenix Dataset / Experiment
 
@@ -81,14 +83,14 @@ Confusion matrix 按 method、benchmark split、source split、ground-truth cano
 - 每个 run 写入 13 个 `attribution.*` evaluator，共 1170 evaluations；不适用值仍以 `score=None`、`label=not_applicable` 明示，聚合分母按本协议计算。
 - 只使用 Phoenix 11.35 公共 client API；没有读取 SQLite 或抓取 HTML。
 
-Phoenix 可直接查看：Dataset input 中的 case/source/revision/source split、benchmark/protocol、benchmark split、manifest hash、imported-history provenance；Dataset output 中的 evaluator-only expected answer、responsible agent、decisive step、failure reason；Experiment metadata 中的 source/baseline revision、method、样本/run/调用计数；run output 中的 prediction/status/confidence/evidence 和 label-free metadata；evaluation 中的 13 个指标及 method/source split/benchmark split/scorable/truncation/provenance metadata。
+Phoenix 可直接查看：Dataset input 中的 case/source/revision/source split、benchmark/protocol、benchmark split、manifest hash、imported-history provenance；Dataset output 中的 expected answer 及 evaluator-only responsible agent、decisive step、failure reason；Experiment metadata 中的 source/baseline revision、method、样本/run/调用计数；run output 中的 prediction/status/confidence/evidence 和 label-free metadata；evaluation 中的 13 个指标及 method/source split/benchmark split/scorable/truncation/provenance metadata。
 
 仍需后续错误归因阶段处理：失败类型 taxonomy 与质量评估、自然语言 failure reason 的因果充分性、外部历史与本项目 runtime/checkpoint/span 的因果映射、模型/网络/浏览器/安全策略类别归因，以及更强方法的 Dev 开发与独立 Frozen Test 发布。外部历史不会被伪装成新的 OTel trace。
 
 ## 复现与产物
 
 ```powershell
-$env:PYTHONPATH='C:/projects/m1-local-lab/src'
+$env:PYTHONPATH=(Join-Path (Get-Location) 'src')
 & '.\.venv-phoenix\Scripts\python.exe' '.\scripts\fetch_who_when_benchmark_v1.py' --materialize-only
 & '.\.venv\Scripts\python.exe' '.\scripts\verify_attribution_benchmark_v1.py'
 ```

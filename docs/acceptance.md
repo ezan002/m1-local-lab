@@ -1,5 +1,7 @@
 # 实机验收记录
 
+2026-09-12 全仓工程审查的离线结果、环境阻塞及残余风险见 [审查报告](full-project-audit-2026-09-12.md)。以下各节保留其历史验收日期及当时结果，不代表本次重新运行了真实模型、浏览器或 Phoenix 验收。
+
 ## Attribution benchmark protocol v1（2026-09-10）
 
 - PASS：固定 HF revision `59b9fcba1aaed7bbf206b5f4d3c68b8face2f49c` 与仓库 revision `b2bae5c5b06d681d04ea5e9b63b7a30525c04925`；下载 1,903,897 bytes，低于 25 MiB 上限。两个 Parquet 覆盖完整 184 行，但仅 30 行进入基准。

@@ -19,6 +19,8 @@ BASELINE_SOURCE_COMMIT = "da3ef193bdd73474eec5191f1e267ee163c308a7"
 DATASET_REVISION = "59b9fcba1aaed7bbf206b5f4d3c68b8face2f49c"
 REPOSITORY_REVISION = "b2bae5c5b06d681d04ea5e9b63b7a30525c04925"
 SELECTION_SEED = "m1-local-lab-attribution-benchmark-v1"
+# Canonical JSON digest of the already published v1 protocol; whitespace is immaterial.
+PROTOCOL_SHA256 = "280fac35e8a759b3a355d3029bb6f832084f5075bade48bf078a7c4060efb467"
 DATASET_NAME = "m1-local-lab-who-when-benchmark-v1"
 EXPERIMENT_NAME = "m1-local-lab-attribution-benchmark-v1"
 SOURCE_SPLITS = ("Hand-Crafted", "Algorithm-Generated")
@@ -96,6 +98,8 @@ class ProtocolConfig(BaseModel):
                 != total
             ):
                 raise ValueError(f"benchmark split counts do not add up for {split}")
+        if sha256_json(self.model_dump(mode="json")) != PROTOCOL_SHA256:
+            raise ValueError("v1 protocol semantics must remain frozen")
         return self
 
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from m1_local.config import Settings
 
 import json
 import os
@@ -89,7 +90,7 @@ def _ensure_phoenix() -> subprocess.Popen[bytes] | None:
         log_root / "attribution-benchmark-phoenix.stderr.log"
     ).open("ab") as stderr:
         process = subprocess.Popen(
-            [str(phoenix_python), "-m", "phoenix.server.main", "serve"],
+            [str(phoenix_python), str(PROJECT_ROOT / "scripts" / "serve_phoenix.py")],
             cwd=PROJECT_ROOT,
             env=environment,
             stdout=stdout,
@@ -140,7 +141,8 @@ def main() -> int:
         repeated = run_benchmark(records)
         if result.model_dump(mode="json") != repeated.model_dump(mode="json"):
             raise RuntimeError("benchmark predictions or aggregates are not reproducible")
-        examples = benchmark_phoenix_examples(records, manifest_sha256=manifest.manifest_sha256)
+        secrets = (Settings().openai_api_key.get_secret_value(),)
+        examples = benchmark_phoenix_examples(records, manifest_sha256=manifest.manifest_sha256, secrets=secrets)
         for example in examples:
             assert_no_label_fields(example["input"])
 
@@ -151,6 +153,7 @@ def main() -> int:
             records,
             manifest_sha256=manifest.manifest_sha256,
             name=DATASET_NAME,
+            secrets=secrets,
         )
         dataset_examples = list(_value(dataset, "examples") or ())
         if len(dataset_examples) != 30:
@@ -161,6 +164,7 @@ def main() -> int:
             result,
             manifest=manifest,
             experiment_name=EXPERIMENT_NAME,
+            secrets=secrets,
         )
         stored = client.experiments.get_experiment(experiment_id=phoenix_result["experiment_id"])
         task_runs = list(stored["task_runs"])

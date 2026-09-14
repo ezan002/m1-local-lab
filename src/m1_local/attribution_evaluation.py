@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .external_export import EXPORT_VIEW_VERSION, safe_export_payload
 
 import copy
 from collections.abc import Mapping, Sequence
@@ -293,8 +294,12 @@ def log_suite_to_phoenix(
     suite: AttributionSuiteResult,
     *,
     experiment_name: str = "m1-local-lab-failure-attribution-mvp",
+    secrets: tuple[str, ...] = (),
 ) -> PhoenixAttributionResult:
     """Log precomputed offline predictions with the Phoenix 11.35 experiment API."""
+    export_predictions = {(item.dataset_case_id, item.method): safe_export_payload(item.model_dump(mode="json"), secrets=secrets) for item in suite.predictions}
+    export_evaluations = {(item.dataset_case_id, item.method): safe_export_payload(item.model_dump(mode="json"), secrets=secrets) for item in suite.evaluations}
+    safe_export_payload({"name": experiment_name, "dataset_id": _field(dataset, "id"), "version_id": _field(dataset, "version_id")}, secrets=secrets)
     examples = list(_field(dataset, "examples") or ())
     case_to_example_id: dict[str, str] = {}
     for example in examples:
@@ -303,9 +308,14 @@ def log_suite_to_phoenix(
         if case_id and example_id:
             case_to_example_id[case_id] = str(example_id)
     expected_cases = {item.dataset_case_id for item in suite.predictions}
+    safe_export_payload({"example_ids": list(case_to_example_id.values())}, secrets=secrets)
     if set(case_to_example_id) != expected_cases:
         raise ValueError("Phoenix dataset examples do not exactly match attribution cases")
 
+    example_input_by_case = {
+        str(_example_input(example).get("dataset_case_id", "")): safe_export_payload(dict(_example_input(example)), secrets=secrets)
+        for example in examples
+    }
     dataset_id = str(_field(dataset, "id"))
     dataset_version_id = _field(dataset, "version_id", "dataset_version_id")
     experiment = client.experiments.create(
@@ -330,10 +340,6 @@ def log_suite_to_phoenix(
     evaluation_by_key = {
         (item.dataset_case_id, item.method): item for item in suite.evaluations
     }
-    example_input_by_case = {
-        str(_example_input(example).get("dataset_case_id", "")): _example_input(example)
-        for example in examples
-    }
     run_ids: list[str] = []
     evaluation_count = 0
     now = datetime.now(timezone.utc)
@@ -345,7 +351,7 @@ def log_suite_to_phoenix(
                 experiment_id=experiment_id,
                 dataset_example_id=case_to_example_id[prediction.dataset_case_id],
                 output={
-                    "prediction": prediction.model_dump(mode="json"),
+                    "prediction": export_predictions[(prediction.dataset_case_id, prediction.method)],
                     "metadata": {
                         "method": method,
                         "dataset_case_id": prediction.dataset_case_id,
@@ -354,6 +360,7 @@ def log_suite_to_phoenix(
                         "trace_origin": "imported_historical",
                         "executed_by_m1_local": False,
                         "external_task_executed": False,
+                        "export_view_version": EXPORT_VIEW_VERSION,
                         "trace_original_step_count": evaluation.trace_original_step_count,
                         "trace_retained_step_count": evaluation.trace_retained_step_count,
                         "trace_truncated": evaluation.trace_truncated,
@@ -375,7 +382,7 @@ def log_suite_to_phoenix(
                     annotator_kind="CODE",
                     score=score,
                     label=label,
-                    explanation=evaluation.unscorable_reason or evaluation.evaluation_status,
+                    explanation=export_evaluations[(evaluation.dataset_case_id, evaluation.method)]["unscorable_reason"] or evaluation.evaluation_status,
                     metadata={
                         "dataset_case_id": evaluation.dataset_case_id,
                         "method": evaluation.method,

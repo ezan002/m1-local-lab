@@ -146,9 +146,10 @@ class FakeDatasets:
             name=name,
             id="dataset-id",
             version_id="version-id",
-            examples=[{"id": f"generated-{index}", "input": item["input"]} for index, item in enumerate(examples)],
+            examples=[{"id": f"generated-{index}", **item} for index, item in enumerate(examples)],
             uploaded=list(examples),
         )
+        self.dataset.to_dict = lambda: {"id": self.dataset.id, "name": self.dataset.name, "version_id": self.dataset.version_id, "examples": self.dataset.examples}
         return self.dataset
 
     def get_dataset(self, *, dataset):
@@ -156,14 +157,14 @@ class FakeDatasets:
         return self.dataset
 
     def add_examples_to_dataset(self, *, dataset, examples):
-        dataset.examples.extend({"id": "generated", "input": item["input"]} for item in examples)
+        dataset.examples.extend({"id": "generated", **item} for item in examples)
         return dataset
 
 
 class FakeExperiments:
     def run_experiment(self, *, dataset, task, evaluators, **kwargs):
         outputs = []
-        for item in dataset.uploaded:
+        for item in dataset.examples:
             output = task(item["input"], item["output"])
             assert evaluators["provenance_guard"](output)[0] is True
             outputs.append(output)

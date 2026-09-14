@@ -43,6 +43,24 @@ def test_protocol_rejects_a_changed_frozen_revision(tmp_path: Path) -> None:
         load_protocol(path)
 
 
+@pytest.mark.parametrize("section,key,value", [
+    ("selection", "dev_counts", {"Hand-Crafted": 6, "Algorithm-Generated": 14}),
+    ("normalization", "unknown_step", "scorable"),
+    ("abstention", "overall_denominator", "exclude abstentions"),
+    ("truncation", "agent_label_may_remain_scorable", False),
+    ("source", "license_policy", "redistribution permitted"),
+])
+def test_protocol_rejects_semantic_drift(tmp_path, section, key, value):
+    payload = json.loads(PROTOCOL_PATH.read_text(encoding="utf-8"))
+    payload[section][key] = value
+    if key == "dev_counts":
+        payload["selection"]["frozen_test_counts"] = {"Hand-Crafted": 4, "Algorithm-Generated": 6}
+    path = tmp_path / "protocol.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="frozen"):
+        load_protocol(path)
+
+
 def test_agent_normalization_is_nfkc_whitespace_and_case_only() -> None:
     assert canonicalize_agent("  ＷebSurfer\tAgent  ") == "websurfer agent"
     assert canonicalize_agent("Orchestrator (thought)") != canonicalize_agent("Orchestrator")

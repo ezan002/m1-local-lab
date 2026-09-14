@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -118,6 +120,26 @@ async def test_model_failure_is_persisted_as_failure(settings):
         await runtime.shutdown()
 
 
+@pytest.mark.asyncio
+async def test_exception_credentials_do_not_enter_current_error_or_sse(settings):
+    secret = "configured-offline-credential"
+    settings = settings.model_copy(update={"openai_api_key": settings.openai_api_key.__class__(secret)})
+
+    class CredentialErrorGateway(RuleBasedGateway):
+        async def plan(self, state):
+            raise RuntimeError(secret + ' {"api_key": "nested-error-credential"}')
+
+    runtime = AgentRuntime(settings, CredentialErrorGateway(), enable_tracing=False)
+    try:
+        run_id = await runtime.create_run("synthetic failure")
+        rendered = str(runtime.store.get_run(run_id)) + str(runtime.store.events_after(run_id))
+        assert secret not in rendered
+        assert "nested-error-credential" not in rendered
+        assert "RuntimeError" in rendered
+    finally:
+        await runtime.shutdown()
+
+
 class GatePlanningGateway(RuleBasedGateway):
     def __init__(self) -> None:
         super().__init__()
@@ -194,3 +216,134 @@ async def test_completed_run_cannot_be_resumed(settings):
             await runtime.resume(run_id)
     finally:
         await runtime.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["resume", "replay", "fork"])
+async def test_control_admission_covers_awaits_and_all_checkpoint_writers(settings, monkeypatch, operation):
+    runtime = AgentRuntime(settings, RuleBasedGateway(), enable_tracing=False)
+    await runtime.startup()
+    entered, release = asyncio.Event(), asyncio.Event()
+    try:
+        original = await runtime.create_run("Draft code", dataset_case_id="synthetic-case")
+        source = next(item for item in await runtime.history(original) if item["next"])
+        paused = await runtime.fork(original, source["checkpoint_id"], {})
+        real_get = runtime.graph.aget_state
+
+        async def gated_get(config, **kwargs):
+            if not entered.is_set():
+                entered.set()
+                await release.wait()
+            return await real_get(config, **kwargs)
+
+        monkeypatch.setattr(runtime.graph, "aget_state", gated_get)
+        calls = {
+            "resume": lambda: runtime.resume(paused, background=True),
+            "replay": lambda: runtime.replay(original, source["checkpoint_id"], background=True),
+            "fork": lambda: runtime.fork(original, source["checkpoint_id"], {}),
+            "create": lambda: runtime.create_run("Draft code", start_background=True),
+        }
+        first = asyncio.create_task(calls[operation]())
+        try:
+            await asyncio.wait_for(entered.wait(), 3)
+            for call in calls.values():
+                with pytest.raises(RuntimeError, match="another run is active"):
+                    await call()
+        finally:
+            release.set()
+            await first
+        await asyncio.gather(*list(runtime._tasks.values()))
+        assert runtime._active_run_id is None
+    finally:
+        release.set()
+        await runtime.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_pause_preserves_real_execution_links_and_input_checkpoints(settings):
+    gateway = GatePlanningGateway()
+    runtime = AgentRuntime(settings, gateway, enable_tracing=False)
+    await runtime.startup()
+    try:
+        run_id = await runtime.create_run("Draft code", start_background=True)
+        task = runtime._tasks[run_id]
+        await asyncio.wait_for(gateway.entered.wait(), 3)
+        runtime.request_pause(run_id)
+        gateway.release.set()
+        await task
+        with contextlib.closing(sqlite3.connect(settings.metadata_db)) as db:
+            db.row_factory = sqlite3.Row
+            links = [dict(row) for row in db.execute("SELECT * FROM checkpoint_links")]
+        assert {link["node_name"] for link in links} == {"planner", "orchestrator"}
+        for link in links:
+            config, snapshot = await runtime._find_checkpoint(run_id, link["output_checkpoint_id"])
+            assert snapshot.values["execution_id"] == link["execution_id"]
+            assert link["input_checkpoint_id"] == snapshot.parent_config["configurable"]["checkpoint_id"]
+    finally:
+        gateway.release.set()
+        await runtime.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_branch_metadata_and_uninitialized_checkpoint_rejection(settings):
+    runtime = AgentRuntime(settings, RuleBasedGateway(), enable_tracing=False)
+    await runtime.startup()
+    try:
+        original = await runtime.create_run("Draft code", dataset_case_id="synthetic-case")
+        history = await runtime.history(original)
+        source = next(item for item in history if item["next"] and item["state"].get("task"))
+        for operation in ("replay", "fork"):
+            args = (original, source["checkpoint_id"])
+            branch = await getattr(runtime, operation)(*args, *([{}] if operation == "fork" else []))
+            assert runtime.store.get_run(branch)["dataset_case_id"] == "synthetic-case"
+            with pytest.raises(ValueError, match="not initialized"):
+                await getattr(runtime, operation)(original, history[-1]["checkpoint_id"], *([{}] if operation == "fork" else []))
+        assert runtime._active_run_id is None
+    finally:
+        await runtime.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_resume_clears_current_error_but_keeps_historical_event(settings):
+    class FailsOnce(RuleBasedGateway):
+        async def plan(self, state):
+            if not self.calls:
+                self.calls += 1
+                raise RuntimeError("controlled failure")
+            return await super().plan(state)
+
+    runtime = AgentRuntime(settings, FailsOnce(), enable_tracing=False)
+    await runtime.startup()
+    try:
+        run_id = await runtime.create_run("Draft code")
+        await runtime.resume(run_id)
+        assert runtime.store.get_run(run_id)["status"] == "completed"
+        assert runtime.store.get_run(run_id)["error"] is None
+        assert any(event["event"] == "error" for event in runtime.store.events_after(run_id))
+    finally:
+        await runtime.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_partial_sse_drains_multiple_pages_then_closes(settings):
+    runtime = AgentRuntime(settings, RuleBasedGateway(), enable_tracing=False)
+    runtime.store.create_run({"run_id": "partial", "thread_id": "thread", "branch_id": "branch", "task": "fixture", "status": "partial"})
+    for index in range(501):
+        runtime.store.emit("partial", "node_finished", {"index": index})
+
+    async def collect():
+        return [chunk async for chunk in runtime.sse("partial") if chunk.startswith("id:")]
+
+    chunks = await asyncio.wait_for(collect(), 3)
+    assert len(chunks) == 501
+    assert len(set(chunks)) == 501
+
+
+@pytest.mark.asyncio
+async def test_shutdown_before_background_task_starts_releases_admission(settings):
+    runtime = AgentRuntime(settings, RuleBasedGateway(), enable_tracing=False)
+    run_id = await runtime.create_run("Draft code", start_background=True)
+    await runtime.shutdown()
+    assert runtime._tasks == {}
+    assert runtime._active_run_id is None
+    assert runtime.store.get_run(run_id)["status"] == "interrupted"

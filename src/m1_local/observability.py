@@ -19,6 +19,7 @@ from openinference.semconv.trace import (
 )
 
 from .config import Settings
+from .telemetry_export import SanitizingExporter
 
 
 _CORRELATION_CONTEXT_KEY = "m1_local.trace_correlation"
@@ -126,8 +127,10 @@ class Observability:
 
     def initialize(self) -> None:
         self.warning = self.check_phoenix()
+        provider = None
         try:
-            from phoenix.otel import register
+            from phoenix.otel import HTTPSpanExporter, register
+            from opentelemetry.sdk.trace.export import BatchSpanProcessor
             from openinference.instrumentation.langchain import LangChainInstrumentor
             from openinference.instrumentation.openai import OpenAIInstrumentor
 
@@ -137,13 +140,26 @@ class Observability:
                 batch=True,
                 protocol="http/protobuf",
                 verbose=False,
+                set_global_tracer_provider=False,
+            )
+            # Replace the default before any instrumentation can emit spans.
+            # Hiding model inputs/outputs alone does not hide SDK exception events.
+            provider.add_span_processor(
+                BatchSpanProcessor(SanitizingExporter(
+                    HTTPSpanExporter(endpoint=self.settings.phoenix_otlp_endpoint),
+                    secrets=(self.settings.openai_api_key.get_secret_value(),),
+                )),
+                replace_default_processor=True,
             )
             self.configure_provider(provider)
             LangChainInstrumentor().instrument(tracer_provider=provider, config=self.trace_config)
             OpenAIInstrumentor().instrument(tracer_provider=provider, config=self.trace_config)
         except Exception as exc:  # tracing must not stop the task
-            self.warning = f"Phoenix tracing unavailable: {type(exc).__name__}: {exc}"
-            self.tracer = trace.get_tracer("m1_local")
+            self.warning = f"Phoenix tracing unavailable: {type(exc).__name__}"
+            if provider is not None:
+                provider.shutdown()
+            self.provider = None
+            self.tracer = trace.NoOpTracerProvider().get_tracer("m1_local")
 
     def check_phoenix(self) -> str | None:
         try:

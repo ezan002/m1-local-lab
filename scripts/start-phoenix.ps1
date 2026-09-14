@@ -1,9 +1,14 @@
+[CmdletBinding()]
+param([string]$DataDirectory)
+
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$Phoenix = Join-Path $ProjectRoot '.venv-phoenix/Scripts/phoenix.exe'
+$Phoenix = Join-Path $ProjectRoot '.venv-phoenix/Scripts/python.exe'
+$Launcher = Join-Path $ProjectRoot 'scripts/serve_phoenix.py'
 $PidDir = Join-Path $ProjectRoot 'data/pids'
 $PidFile = Join-Path $PidDir 'phoenix.pid'
-$WorkingDir = Join-Path $ProjectRoot 'data/phoenix'
+$OwnerFile = Join-Path $PidDir 'phoenix.owner.json'
+$WorkingDir = if ($DataDirectory) { [IO.Path]::GetFullPath($DataDirectory) } else { Join-Path $ProjectRoot 'data/phoenix' }
 $LogDir = Join-Path $ProjectRoot 'data/logs'
 $StdoutLog = Join-Path $LogDir 'phoenix.stdout.log'
 $StderrLog = Join-Path $LogDir 'phoenix.stderr.log'
@@ -25,9 +30,10 @@ foreach ($Entry in $PhoenixEnv.GetEnumerator()) {
   [Environment]::SetEnvironmentVariable($Entry.Key, $Entry.Value, 'Process')
 }
 try {
-  $Process = Start-Process -FilePath $Phoenix -ArgumentList 'serve' -WorkingDirectory $ProjectRoot -PassThru -WindowStyle Hidden -RedirectStandardOutput $StdoutLog -RedirectStandardError $StderrLog
+  $Process = Start-Process -FilePath $Phoenix -ArgumentList ('"' + $Launcher + '"') -WorkingDirectory $ProjectRoot -PassThru -WindowStyle Hidden -RedirectStandardOutput $StdoutLog -RedirectStandardError $StderrLog
+  @{ pid = $Process.Id; startedUtcTicks = $Process.StartTime.ToUniversalTime().Ticks; launcher = $Launcher } | ConvertTo-Json | Set-Content -LiteralPath $OwnerFile -Encoding UTF8
   Set-Content -LiteralPath $PidFile -Value $Process.Id -Encoding ascii
-  Write-Output "Phoenix starting as PID $($Process.Id) at http://127.0.0.1:6006"
+  Write-Output "Phoenix starting as PID $($Process.Id) at http://127.0.0.1:6006 (HTTP OTLP enabled; gRPC disabled)"
 } finally {
   foreach ($Entry in $OldValues.GetEnumerator()) { [Environment]::SetEnvironmentVariable($Entry.Key, $Entry.Value, 'Process') }
 }

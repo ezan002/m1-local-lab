@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from .external_export import EXPORT_VIEW_VERSION, safe_export_example, safe_export_payload
 import csv
 import hashlib
 import json
@@ -330,9 +331,30 @@ def load_manifest(path: Path, *, protocol_path: Path) -> BenchmarkManifest:
     if claimed != sha256_json(unhashed):
         raise ValueError("manifest SHA-256 mismatch")
     protocol_payload = json.loads(protocol_path.read_text(encoding="utf-8"))
+    protocol = ProtocolConfig.model_validate(protocol_payload)
     if payload.get("protocol_sha256") != sha256_json(protocol_payload):
         raise ValueError("protocol file SHA-256 mismatch")
-    return BenchmarkManifest.model_validate(payload)
+    manifest = BenchmarkManifest.model_validate(payload)
+    if Counter(case.source_split for case in manifest.cases) != manifest.selected_counts:
+        raise ValueError("manifest actual source counts mismatch")
+    if Counter(case.benchmark_split for case in manifest.cases) != manifest.benchmark_split_counts:
+        raise ValueError("manifest actual benchmark counts mismatch")
+    if (manifest.selection_seed, manifest.selection_algorithm, manifest.split_algorithm, manifest.license_policy) != (
+        protocol.selection.seed, protocol.selection.algorithm, protocol.selection.split_algorithm, protocol.source.license_policy,
+    ):
+        raise ValueError("manifest protocol semantics mismatch")
+    for split in SOURCE_SPLITS:
+        cases = [case for case in manifest.cases if case.source_split == split]
+        ordered = sorted(cases, key=lambda case: (benchmark_split_hash(split, case.original_case_id), case.original_case_id))
+        dev_ids = {case.original_case_id for case in ordered[:protocol.selection.dev_counts[split]]}
+        for case in cases:
+            if case.dataset_case_id != f"who-and-when:{split.casefold()}:{case.original_case_id}":
+                raise ValueError("manifest case identity mismatch")
+            if case.selection_sha256 != selection_hash(split, case.original_case_id) or case.benchmark_split_sha256 != benchmark_split_hash(split, case.original_case_id):
+                raise ValueError("manifest deterministic hash mismatch")
+            if case.benchmark_split != ("Dev" if case.original_case_id in dev_ids else "Frozen Test"):
+                raise ValueError("manifest deterministic benchmark split mismatch")
+    return manifest
 
 
 def verify_source_receipt(manifest: BenchmarkManifest, raw_root: Path) -> dict[str, Any]:
@@ -401,8 +423,15 @@ def evaluate_benchmark_prediction(
     prediction: AttributionPrediction,
 ) -> BenchmarkCaseEvaluation:
     prediction_before = copy.deepcopy(prediction.model_dump(mode="python"))
-    if inference.dataset_case_id != labels.dataset_case_id or labels.dataset_case_id != prediction.dataset_case_id:
+    if len({case.dataset_case_id, inference.dataset_case_id, labels.dataset_case_id, prediction.dataset_case_id}) != 1:
         raise ValueError("case identity mismatch")
+    if (
+        inference.source != labels.source or inference.source != "Who&When"
+        or inference.revision != labels.revision or inference.revision != DATASET_REVISION
+        or inference.source_case_id != labels.source_case_id or inference.source_case_id != case.original_case_id
+        or inference.source_split != case.source_split
+    ):
+        raise ValueError("case provenance mismatch")
     if prediction.status == "error":
         raise ValueError("frozen predictor returned error status")
     gt_agent = canonicalize_agent(labels.responsible_agent)
@@ -571,10 +600,11 @@ def benchmark_phoenix_examples(
     records: Sequence[tuple[ManifestCase, ExternalTraceRecord, AttributionInput, AttributionGroundTruth]],
     *,
     manifest_sha256: str,
+    secrets: Sequence[str] = (),
 ) -> list[dict[str, Any]]:
     examples = []
     for case, record, inference, _labels in records:
-        item = record.phoenix_example()
+        item = safe_export_example(record.phoenix_example(), secrets=secrets)
         assert_no_label_fields(item["input"])
         item["input"].update(
             {
@@ -604,8 +634,9 @@ def ensure_benchmark_dataset(
     *,
     manifest_sha256: str,
     name: str = DATASET_NAME,
+    secrets: Sequence[str] = (),
 ) -> tuple[Any, bool, str]:
-    examples = benchmark_phoenix_examples(records, manifest_sha256=manifest_sha256)
+    examples = benchmark_phoenix_examples(records, manifest_sha256=manifest_sha256, secrets=secrets)
     existing = next((item for item in client.datasets.list() if _field(item, "name") == name), None)
     effective_name = name
     if existing is not None:
@@ -657,13 +688,18 @@ def log_benchmark_to_phoenix(
     *,
     manifest: BenchmarkManifest,
     experiment_name: str = EXPERIMENT_NAME,
+    secrets: Sequence[str] = (),
 ) -> dict[str, Any]:
+    export_predictions = {(item.dataset_case_id, item.method): safe_export_payload(item.model_dump(mode="json"), secrets=secrets) for item in result.predictions}
+    export_evaluations = {(item.dataset_case_id, item.method): safe_export_payload(item.model_dump(mode="json"), secrets=secrets) for item in result.evaluations}
+    safe_export_payload({"name": experiment_name, "dataset_id": _field(dataset, "id"), "version_id": _field(dataset, "version_id")}, secrets=secrets)
     examples = list(_field(dataset, "examples") or ())
     case_to_example = {
         str(_field(example, "input").get("dataset_case_id")): str(_field(example, "id", "example_id", "dataset_example_id"))
         for example in examples
     }
     expected_ids = {item.dataset_case_id for item in result.predictions}
+    safe_export_payload({"example_ids": list(case_to_example.values())}, secrets=secrets)
     if set(case_to_example) != expected_ids:
         raise ValueError("Phoenix dataset does not exactly match benchmark cases")
     dataset_id = str(_field(dataset, "id"))
@@ -699,7 +735,7 @@ def log_benchmark_to_phoenix(
         evaluation = evaluation_by_key[(prediction.dataset_case_id, prediction.method)]
         repetition = METHODS.index(prediction.method) + 1
         output = {
-            "prediction": prediction.model_dump(mode="json"),
+            "prediction": export_predictions[(prediction.dataset_case_id, prediction.method)],
             "metadata": {
                 "dataset_case_id": prediction.dataset_case_id,
                 "method": prediction.method,
@@ -713,6 +749,7 @@ def log_benchmark_to_phoenix(
                 "trace_origin": "imported_historical",
                 "executed_by_m1_local": False,
                 "external_task_executed": False,
+                "export_view_version": EXPORT_VIEW_VERSION,
             },
         }
         assert_no_label_fields(output)
@@ -734,7 +771,7 @@ def log_benchmark_to_phoenix(
                 annotator_kind="CODE",
                 score=score,
                 label=label,
-                explanation=evaluation.unscorable_reason or evaluation.prediction_status,
+                explanation=export_evaluations[(evaluation.dataset_case_id, evaluation.method)]["unscorable_reason"] or evaluation.prediction_status,
                 metadata={
                     "dataset_case_id": evaluation.dataset_case_id,
                     "method": evaluation.method,

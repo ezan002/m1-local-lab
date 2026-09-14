@@ -35,6 +35,7 @@ const ui = {
   },
   runs: [],
   currentRunId: null,
+  selectionToken: 0,
   current: null,
   history: [],
   selectedCheckpoint: null,
@@ -224,6 +225,7 @@ function closeEventSource() {
 }
 
 async function selectRun(runId) {
+  const selectionToken = ++ui.selectionToken;
   if (ui.currentRunId !== runId) {
     closeEventSource();
     ui.currentRunId = runId;
@@ -243,23 +245,39 @@ async function selectRun(runId) {
     const [current, history, events] = await Promise.all([
       api(`/api/runs/${encodeURIComponent(runId)}`),
       api(`/api/runs/${encodeURIComponent(runId)}/history`),
-      api(`/api/runs/${encodeURIComponent(runId)}/events-log`)
+      loadEventPages(runId)
     ]);
-    if (ui.currentRunId !== selectedId) return;
+    if (ui.currentRunId !== selectedId || ui.selectionToken !== selectionToken) return;
     ui.current = current;
     ui.history = history;
     ui.events = [];
     ui.eventIds = new Set();
+    ui.lastEventId = 0;
     events.forEach(appendEvent);
     if (ui.selectedCheckpoint) {
       ui.selectedCheckpoint = history.find(item => item.checkpoint_id === ui.selectedCheckpoint.checkpoint_id) || null;
     }
     renderAll();
     if (!isStreamTerminal(current.status)) connectEvents();
-    else setStreamStatus("idle", "运行已停止");
+    else {
+      closeEventSource();
+      setStreamStatus("idle", "运行已停止");
+    }
   } catch (error) {
-    if (ui.currentRunId !== selectedId) return;
+    if (ui.currentRunId !== selectedId || ui.selectionToken !== selectionToken) return;
     renderDetailError(error);
+  }
+}
+
+async function loadEventPages(runId, after = 0) {
+  const result = [];
+  while (true) {
+    const page = await api(`/api/runs/${encodeURIComponent(runId)}/events-log?after=${after}`);
+    result.push(...page);
+    if (page.length < 500) return result;
+    const next = Number(page[page.length - 1].id);
+    if (next <= after) throw new Error("事件游标未前进，请重试。");
+    after = next;
   }
 }
 
@@ -313,9 +331,13 @@ function connectEvents() {
   ui.source = source;
   setStreamStatus("idle", "正在连接");
   byId("retry-stream").hidden = true;
-  source.onopen = () => setStreamStatus("live", "实时连接");
+  source.onopen = () => {
+    if (ui.currentRunId === runId && ui.source === source) setStreamStatus("live", "实时连接");
+  };
   EVENT_TYPES.forEach(type => source.addEventListener(type, message => {
     if (ui.currentRunId !== runId || ui.source !== source) return;
+    // Native transport error events have no data; persisted application errors do.
+    if (!("data" in message)) return;
     let data = {};
     try { data = JSON.parse(message.data || "{}"); }
     catch { data = {raw: message.data}; }
@@ -347,13 +369,19 @@ function scheduleDetailRefresh() {
 
 async function refreshSelectedDetail() {
   const runId = ui.currentRunId;
+  const selectionToken = ui.selectionToken;
   if (!runId) return;
   try {
     const [current, history] = await Promise.all([
       api(`/api/runs/${encodeURIComponent(runId)}`),
       api(`/api/runs/${encodeURIComponent(runId)}/history`)
     ]);
-    if (ui.currentRunId !== runId) return;
+    if (ui.currentRunId !== runId || ui.selectionToken !== selectionToken) return;
+    if (isStreamTerminal(current.status)) {
+      const tail = await loadEventPages(runId, ui.lastEventId);
+      if (ui.currentRunId !== runId || ui.selectionToken !== selectionToken) return;
+      tail.forEach(appendEvent);
+    }
     ui.current = current;
     ui.history = history;
     if (ui.selectedCheckpoint) {
@@ -361,6 +389,7 @@ async function refreshSelectedDetail() {
     }
     renderAll();
     await refreshRuns({quiet: true});
+    if (ui.currentRunId !== runId || ui.selectionToken !== selectionToken) return;
     if (isStreamTerminal(current.status)) {
       closeEventSource();
       setStreamStatus("idle", current.status === "paused" ? "已暂停" : "运行已停止");

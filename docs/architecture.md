@@ -1,5 +1,7 @@
 # 架构与执行语义
 
+审查修正：所有进程内 checkpoint 写入入口（包括 Fork）在首个 `await` 前预留准入；暂停通知不再被当成新节点提交，输入 checkpoint 来自真实 `parent_config`；根 span 结束后统一 flush。未初始化的 `__start__` 快照不可 Replay/Fork。应用 OTel 使用独立 exporter 脱敏 SDK 异常和序列化摘要，不修改归因冻结预处理。导师部署收尾增加数据库进程所有权锁、仅 HTTP 的 Phoenix 启动入口及独立历史导出安全视图；验证证据与预算计数等残余问题见 [审查报告](full-project-audit-optimization.md)。
+
 ## Attribution benchmark v1 旁路
 
 `attribution_protocol.py` 固化版本、revision、选择/划分、Agent/step 规范化与 abstain/truncation 分母；`attribution_benchmark.py` 在现有 `external_datasets.py` 与未修改的 `attribution.py` 之后执行 30×3 离线矩阵、分组聚合、confusion matrix 和 Phoenix 公共 API 写入。它是独立评估旁路，不进入 AgentRuntime、LangGraph state/checkpoint 或网页 API，LangGraph 仍是在线任务的唯一调度器。
@@ -41,7 +43,7 @@ ground truth ───────→ evaluator ──────────�
 
 `external_datasets.py` 是独立于现有 JSONL runner 的只读适配边界。TraceElephant 与 Who&When 分别解析为统一 `ExternalTraceRecord`，但保留各自 source、revision、split、case ID、原 Agent 名称和 ground truth，不进入 LangGraph state，也不改变 LangGraph 的唯一调度器地位。
 
-外部历史轨迹只写入 Phoenix Dataset example，标记 `trace_origin=imported_historical`、`executed_by_m1_local=false`、`external_task_executed=false`，不会转换成应用 OpenTelemetry spans。离线 Experiment 可引用单独的 RuleBasedGateway 本地验证 run/trace；该本地 trace 只证明适配器和管线可工作，不代表重跑了外部 task。完整 schema、版本与验收证据见 [external-dataset-smoke.md](external-dataset-smoke.md)。
+外部历史以独立脱敏展示视图写入 Phoenix Dataset example，标记 `trace_origin=imported_historical`、`executed_by_m1_local=false`、`external_task_executed=false`。Phoenix SDK 可以为离线兼容验证生成实验 spans，其 input 使用 Dataset 的安全副本；这些 spans 不是外部 Agent 的真实执行记录。离线 Experiment 可引用单独的 RuleBasedGateway 本地验证 run/trace；该本地 trace 只证明适配器和管线可工作，不代表重跑了外部 task。完整 schema、版本与验收证据见 [external-dataset-smoke.md](external-dataset-smoke.md)。
 
 ### 离线错误归因旁路
 
@@ -53,7 +55,7 @@ ExternalTraceRecord
   └─ ground-truth view ─────────────────────────────────────→ evaluator → Phoenix Experiment
 ```
 
-inference view 在深拷贝后递归拒绝所有标签 key，预测函数只接受该 frozen Pydantic 对象；Ground Truth 只在 prediction 产生后交给 evaluator。TraceElephant 与 Who&When 使用独立 step normalizer。Phoenix task result 仅含 prediction 与 inference 可知的 source/revision/truncation/provenance metadata；label-derived scorable 字段只写入 evaluation metadata，真实标签仅位于 Dataset expected/output 和 evaluation 阶段。外部历史仍不生成 OTel spans。完整规则、分母语义和实测见 [failure-attribution-mvp.md](failure-attribution-mvp.md)。
+inference view 在深拷贝后递归拒绝 evaluator-only 标签 key，预测函数只接受该 frozen Pydantic 对象；Ground Truth 只在 prediction 产生后交给 evaluator。TraceElephant 与 Who&When 使用独立 step normalizer。Phoenix task result 仅含 prediction 与 inference 可知的 source/revision/truncation/provenance metadata；label-derived scorable 字段只写入 evaluation metadata，真实标签仅位于 Dataset expected/output 和 evaluation 阶段。显式归因日志使用预计算结果的安全副本，保留身份、指标与原本地结果。完整规则、分母语义和实测见 [failure-attribution-mvp.md](failure-attribution-mvp.md)。
 
 ## 组件关系
 

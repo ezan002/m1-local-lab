@@ -9,7 +9,7 @@ from typing import Any, Literal
 from fastapi import FastAPI, Header, HTTPException, Path as ApiPath, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .attribution import AttributionMethodName
 from .attribution_read_model import (
@@ -31,14 +31,26 @@ class RunRequest(BaseModel):
     task: str = Field(min_length=1, max_length=20_000)
     allowed_files: list[str] = Field(default_factory=list, max_length=20)
 
+    @field_validator("task")
+    @classmethod
+    def nonblank_task(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("task must not be empty")
+        return value.strip()
+
 
 class ReplayRequest(BaseModel):
-    checkpoint_id: str
+    checkpoint_id: str = Field(min_length=1, max_length=200)
 
 
 class ForkRequest(BaseModel):
-    checkpoint_id: str
+    checkpoint_id: str = Field(min_length=1, max_length=200)
     changes: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("changes")
+    @classmethod
+    def typed_changes(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return AgentRuntime.validate_fork_changes(value)
 
 
 def public_run(record: dict[str, Any]) -> dict[str, Any]:
@@ -60,13 +72,16 @@ def create_app(
     cfg = settings or get_settings()
     engine = runtime or AgentRuntime(cfg)
     csrf_token = secrets.token_urlsafe(32)
-    allowed_hosts = {f"{cfg.app_host}:{cfg.app_port}", f"localhost:{cfg.app_port}", f"127.0.0.1:{cfg.app_port}"}
+    host_name = f"[{cfg.app_host}]" if ":" in cfg.app_host else cfg.app_host
+    allowed_hosts = {f"{host_name}:{cfg.app_port}", f"localhost:{cfg.app_port}", f"127.0.0.1:{cfg.app_port}"}
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         await engine.startup()
-        yield
-        await engine.shutdown()
+        try:
+            yield
+        finally:
+            await engine.shutdown()
 
     app = FastAPI(title="M1 Local Lab", lifespan=lifespan)
     app.state.runtime = engine
@@ -209,7 +224,7 @@ def create_app(
         try:
             engine.request_pause(run_id)
             return {"status": "pausing"}
-        except (KeyError, ValueError) as exc:
+        except (KeyError, ValueError, RuntimeError) as exc:
             raise HTTPException(409, str(exc)) from exc
 
     @app.post("/api/runs/{run_id}/resume", status_code=202)
@@ -233,21 +248,25 @@ def create_app(
         try:
             new_run = await engine.fork(run_id, body.checkpoint_id, body.changes)
             return {"run_id": new_run}
-        except (KeyError, ValueError) as exc:
+        except (KeyError, ValueError, RuntimeError) as exc:
             raise HTTPException(409, str(exc)) from exc
 
     @app.get("/api/runs/{run_id}/events")
-    async def events(run_id: str, last_event_id: int = 0, last_event_header: str | None = Header(None, alias="Last-Event-ID")) -> StreamingResponse:
+    async def events(
+        run_id: str,
+        last_event_id: int = Query(0, ge=0, le=2**63 - 1),
+        last_event_header: int | None = Header(None, alias="Last-Event-ID", ge=0, le=2**63 - 1),
+    ) -> StreamingResponse:
         try:
             if engine.store.get_run(run_id) is None:
                 raise KeyError(run_id)
-            after = int(last_event_header) if last_event_header else last_event_id
+            after = last_event_header if last_event_header is not None else last_event_id
             return StreamingResponse(engine.sse(run_id, after), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
         except (KeyError, ValueError) as exc:
             raise HTTPException(404, str(exc)) from exc
 
     @app.get("/api/runs/{run_id}/events-log")
-    async def event_log(run_id: str, after: int = 0) -> list[dict[str, Any]]:
+    async def event_log(run_id: str, after: int = Query(0, ge=0, le=2**63 - 1)) -> list[dict[str, Any]]:
         if engine.store.get_run(run_id) is None:
             raise HTTPException(404, "run not found")
         return engine.store.events_after(run_id, after)
