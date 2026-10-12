@@ -340,7 +340,13 @@ class StudioEngine:
     async def start_run(self, workflow: dict[str, Any], inputs: dict[str, Any], *, breakpoints: list[str] | None = None,
                         provider_override: str | None = None, wait: bool = False) -> dict[str, Any]:
         definition = workflow["definition"]
-        WorkflowDefinition.model_validate(definition)
+        model = WorkflowDefinition.model_validate(definition)
+        fields = next(n for n in model.nodes if n.type == "start").config.inputs
+        unknown = sorted(set(inputs) - {f.name for f in fields})
+        if unknown:
+            raise ValueError(f"unknown inputs: {unknown}")
+        # Defaults are resolved once here so every template sees the same input.* values.
+        inputs = {f.name: str(inputs.get(f.name, f.default)) for f in fields}
         caps = self._capabilities(definition, provider_override)
         run = self.store.create_run(
             workflow_id=workflow["id"], workflow_version=workflow["version"], workflow_name=workflow["name"],

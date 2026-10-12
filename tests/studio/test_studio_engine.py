@@ -213,3 +213,13 @@ async def test_restart_recovery_paused_and_interrupted_runs(tmp_path):
     finally:
         await engine2.shutdown()
         store2.close()
+
+
+async def test_start_defaults_are_resolved_into_inputs(env):
+    store, engine, _ = env
+    wf = store.get_workflow(CALC_ID)
+    run = store.get_run((await engine.start_run(wf, {}, wait=True))["id"])
+    assert run["input"] == {"expression": "12 * (7 + 5)"}
+    assert run["output"] == {"large": "LARGE: 12 * (7 + 5) = 144"}  # template reads input.expression
+    with pytest.raises(ValueError, match="unknown inputs"):
+        await engine.start_run(wf, {"nope": "1"})

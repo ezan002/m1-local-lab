@@ -1,0 +1,385 @@
+{
+  "started_at": "2026-10-12T23:20:17.516308+00:00",
+  "checks": [
+    {
+      "name": "real model multi-agent run",
+      "pass": true,
+      "run": {
+        "id": "run_dc05a8296a83",
+        "status": "completed",
+        "provider_mode": "openai",
+        "error": null,
+        "relation": null,
+        "parent_run_id": null,
+        "executed_path": [
+          "start",
+          "planner",
+          "researcher",
+          "reviewer",
+          "needs_revision",
+          "final"
+        ],
+        "llm_calls": [
+          {
+            "node": "planner",
+            "model": "gpt-4.1-mini-2025-04-14",
+            "usage": {
+              "completion_tokens": 95,
+              "prompt_tokens": 51,
+              "total_tokens": 146,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0,
+                "text_tokens": null
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cache_write_tokens": null,
+                "cached_tokens": 0,
+                "image_tokens": null,
+                "text_tokens": null
+              }
+            },
+            "latency_ms": 1812,
+            "status": "ok"
+          },
+          {
+            "node": "researcher",
+            "model": "gpt-4.1-mini-2025-04-14",
+            "usage": {
+              "completion_tokens": 348,
+              "prompt_tokens": 195,
+              "total_tokens": 543,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0,
+                "text_tokens": null
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cache_write_tokens": null,
+                "cached_tokens": 0,
+                "image_tokens": null,
+                "text_tokens": null
+              }
+            },
+            "latency_ms": 2304,
+            "status": "ok"
+          },
+          {
+            "node": "reviewer",
+            "model": "gpt-4.1-mini-2025-04-14",
+            "usage": {
+              "completion_tokens": 3,
+              "prompt_tokens": 388,
+              "total_tokens": 391,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0,
+                "text_tokens": null
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cache_write_tokens": null,
+                "cached_tokens": 0,
+                "image_tokens": null,
+                "text_tokens": null
+              }
+            },
+            "latency_ms": 713,
+            "status": "ok"
+          }
+        ],
+        "tool_calls": [],
+        "reviewer_outputs": [
+          "APPROVED"
+        ],
+        "output_preview": "{\"final\": \"# Brief: How do checkpoints enable debugging of LLM agent workflows?\\n\\nFindings on Checkpoints in LLM Agent Workflows and Their Role in Debugging\\n\\n1. Definition and Role of Checkpoints:\\nIn LLM (Large Language Model) agent workflows, checkpoints are predefined states or snapshots capturing the agent's context, data, and progress at specific moments during execution. They serve as critical markers that enable pausing, inspecting, and resuming complex processes. Checkpoints are important for managing intricate workflows by providing stable reference points that help in tracking the"
+      }
+    },
+    {
+      "name": "fork of real-model run with edited reviewer verdict changes the path",
+      "pass": true,
+      "original_verdict": "APPROVED",
+      "edited_verdict": "REVISE: add one concrete numeric example from a real system.",
+      "run": {
+        "id": "run_d9cf5e882aa6",
+        "status": "completed",
+        "provider_mode": "openai",
+        "error": null,
+        "relation": "fork",
+        "parent_run_id": "run_dc05a8296a83",
+        "executed_path": [
+          "needs_revision",
+          "researcher",
+          "reviewer",
+          "needs_revision",
+          "final"
+        ],
+        "llm_calls": [
+          {
+            "node": "researcher",
+            "model": "gpt-4.1-mini-2025-04-14",
+            "usage": {
+              "completion_tokens": 382,
+              "prompt_tokens": 208,
+              "total_tokens": 590,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0,
+                "text_tokens": null
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cache_write_tokens": null,
+                "cached_tokens": 0,
+                "image_tokens": null,
+                "text_tokens": null
+              }
+            },
+            "latency_ms": 2477,
+            "status": "ok"
+          },
+          {
+            "node": "reviewer",
+            "model": "gpt-4.1-mini-2025-04-14",
+            "usage": {
+              "completion_tokens": 3,
+              "prompt_tokens": 422,
+              "total_tokens": 425,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0,
+                "text_tokens": null
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cache_write_tokens": null,
+                "cached_tokens": 0,
+                "image_tokens": null,
+                "text_tokens": null
+              }
+            },
+            "latency_ms": 606,
+            "status": "ok"
+          }
+        ],
+        "tool_calls": [],
+        "reviewer_outputs": [
+          "APPROVED"
+        ],
+        "output_preview": "{\"final\": \"# Brief: How do checkpoints enable debugging of LLM agent workflows?\\n\\nFindings on Checkpoints in LLM Agent Workflows and Debugging\\n\\n1. Checkpoints in LLM Agent Workflows:\\nCheckpoints are predefined states or snapshots within a large language model (LLM) agent workflow that capture the current context, data, and intermediate outputs. They serve as critical markers to manage complex, multi-step processes by enabling the workflow to pause, save progress, and resume or revisit specific points. This modular approach helps in isolating stages of the workflow, improving control and tr"
+      },
+      "source_spans_unchanged": true,
+      "source_checkpoints_unchanged": true
+    },
+    {
+      "name": "replay from planner checkpoint (state restored, model re-called)",
+      "pass": true,
+      "output_identical_to_source": false,
+      "note": "Non-identical output is expected: replay restores state, it does not make model calls deterministic.",
+      "run": {
+        "id": "run_c75ed15cd429",
+        "status": "completed",
+        "provider_mode": "openai",
+        "error": null,
+        "relation": "replay",
+        "parent_run_id": "run_dc05a8296a83",
+        "executed_path": [
+          "researcher",
+          "reviewer",
+          "needs_revision",
+          "final"
+        ],
+        "llm_calls": [
+          {
+            "node": "researcher",
+            "model": "gpt-4.1-mini-2025-04-14",
+            "usage": {
+              "completion_tokens": 395,
+              "prompt_tokens": 195,
+              "total_tokens": 590,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0,
+                "text_tokens": null
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cache_write_tokens": null,
+                "cached_tokens": 0,
+                "image_tokens": null,
+                "text_tokens": null
+              }
+            },
+            "latency_ms": 2559,
+            "status": "ok"
+          },
+          {
+            "node": "reviewer",
+            "model": "gpt-4.1-mini-2025-04-14",
+            "usage": {
+              "completion_tokens": 3,
+              "prompt_tokens": 435,
+              "total_tokens": 438,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0,
+                "text_tokens": null
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cache_write_tokens": null,
+                "cached_tokens": 0,
+                "image_tokens": null,
+                "text_tokens": null
+              }
+            },
+            "latency_ms": 681,
+            "status": "ok"
+          }
+        ],
+        "tool_calls": [],
+        "reviewer_outputs": [
+          "APPROVED"
+        ],
+        "output_preview": "{\"final\": \"# Brief: How do checkpoints enable debugging of LLM agent workflows?\\n\\nFindings on Checkpoints in LLM Agent Workflows and Debugging\\n\\n1. Checkpoints in LLM Agent Workflows:\\nCheckpoints are defined states or snapshots within the workflow of large language model (LLM) agents that capture the current context, data, and decision points. They serve as critical markers that allow the workflow to be paused, inspected, or resumed from a known state. Their importance lies in managing complex, multi-step processes by providing control points that help in monitoring progress, isolating issu"
+      }
+    },
+    {
+      "name": "real model calls a tool (OpenAI function calling) and uses its result",
+      "pass": true,
+      "expected": 441052110,
+      "tool_spans": [
+        {
+          "input": {
+            "expression": "48271 * 9137 - 17"
+          },
+          "output": {
+            "expression": "48271 * 9137 - 17",
+            "result": 441052110
+          },
+          "status": "ok",
+          "tool_call_id": "call_og4tJI2qPka5uixV7hRAiiLV"
+        }
+      ],
+      "run": {
+        "id": "run_8b0889e9ee9e",
+        "status": "completed",
+        "provider_mode": "openai",
+        "error": null,
+        "relation": null,
+        "parent_run_id": null,
+        "executed_path": [
+          "start",
+          "calc_agent",
+          "out"
+        ],
+        "llm_calls": [
+          {
+            "node": "calc_agent",
+            "model": "gpt-4.1-mini-2025-04-14",
+            "usage": {
+              "completion_tokens": 22,
+              "prompt_tokens": 68,
+              "total_tokens": 90,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0,
+                "text_tokens": null
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cache_write_tokens": null,
+                "cached_tokens": 0,
+                "image_tokens": null,
+                "text_tokens": null
+              }
+            },
+            "latency_ms": 735,
+            "status": "ok"
+          },
+          {
+            "node": "calc_agent",
+            "model": "gpt-4.1-mini-2025-04-14",
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 119,
+              "total_tokens": 123,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0,
+                "text_tokens": null
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cache_write_tokens": null,
+                "cached_tokens": 0,
+                "image_tokens": null,
+                "text_tokens": null
+              }
+            },
+            "latency_ms": 520,
+            "status": "ok"
+          }
+        ],
+        "tool_calls": [
+          {
+            "node": "calc_agent",
+            "name": "tool:calculator",
+            "status": "ok"
+          }
+        ],
+        "reviewer_outputs": [],
+        "output_preview": "{\"out\": \"441052110\"}"
+      }
+    },
+    {
+      "name": "external OTel agent with real model -> read-only trace",
+      "pass": true,
+      "run_id": "ext_80025e6bcb3e6416f767b4f2ceafe5b4",
+      "span_count": 6,
+      "llm_models": [
+        "gpt-4.1-mini",
+        "gpt-4.1-mini"
+      ],
+      "token_attributes": [
+        {
+          "llm.token_count.completion_tokens": 67,
+          "llm.token_count.prompt_tokens": 17,
+          "llm.token_count.total_tokens": 84
+        },
+        {
+          "llm.token_count.completion_tokens": 29,
+          "llm.token_count.prompt_tokens": 85,
+          "llm.token_count.total_tokens": 114
+        }
+      ]
+    }
+  ],
+  "provider": {
+    "openai_key_configured": true,
+    "base_url": "https://api.openai.com/v1",
+    "default_model": "gpt-4.1-mini"
+  },
+  "finished_at": "2026-10-12T23:20:39.114028+00:00",
+  "status": "PASS"
+}

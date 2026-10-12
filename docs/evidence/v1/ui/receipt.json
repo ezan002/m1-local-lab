@@ -1,0 +1,75 @@
+{
+  "started_at": "2026-10-12T23:17:11.780881+00:00",
+  "base": "http://127.0.0.1:63054",
+  "data_dir": "C:\\Users\\wangy\\AppData\\Local\\Temp\\studio-ui-n2y1wyi7",
+  "provider": "deterministic (scripted); no model calls",
+  "steps": [
+    {
+      "step": "workflow list renders seeded workflows",
+      "screenshot": "01-workflows.jpg"
+    },
+    {
+      "step": "editor: add node, connect edges, edit config, save (verified via API)",
+      "screenshot": "02-editor-saved.jpg",
+      "workflow_id": "wf_4aae3020a3b8",
+      "edges": [
+        [
+          "assistant",
+          "tool_1"
+        ],
+        [
+          "start",
+          "assistant"
+        ],
+        [
+          "tool_1",
+          "answer"
+        ]
+      ]
+    },
+    {
+      "step": "run from editor; live node status overlay",
+      "screenshot": "03-editor-run-complete.jpg"
+    },
+    {
+      "step": "run detail: span drill-down shows tool input/output",
+      "screenshot": "04-run-spans.jpg",
+      "run_id": "run_6aec865ec76c"
+    },
+    {
+      "step": "timeline renders",
+      "screenshot": "05-timeline.jpg"
+    },
+    {
+      "step": "fork with edited agent output -> different downstream result; lineage persisted",
+      "screenshot": "06-fork-result.jpg",
+      "fork_id": "run_e9b9a292d495"
+    },
+    {
+      "step": "fork graph marks inherited nodes",
+      "screenshot": "07-fork-graph.jpg"
+    },
+    {
+      "step": "reload keeps workflow and runs",
+      "screenshot": "08-after-reload.jpg"
+    },
+    {
+      "step": "failure surfaced: failed node highlighted, error + retry hint",
+      "screenshot": "09-failure.jpg"
+    },
+    {
+      "step": "external agent launched; trace shown read-only, no fork",
+      "screenshot": "10-external-trace.jpg"
+    }
+  ],
+  "browser_errors": {
+    "console": [],
+    "page": [],
+    "failed_requests": [],
+    "http_errors": []
+  },
+  "chromium": "139.0.7258.5",
+  "result_note": "http_errors lists every >=400 response seen by the page",
+  "status": "PASS",
+  "finished_at": "2026-10-12T23:17:23.692829+00:00"
+}
