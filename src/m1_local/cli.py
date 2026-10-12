@@ -75,6 +75,9 @@ def parser() -> argparse.ArgumentParser:
     dataset.add_argument("path")
     dataset.add_argument("--limit", type=int, required=True, help="Explicit cost-control limit")
     serve = sub.add_parser("serve")
+    studio = sub.add_parser("studio", help="Agent Studio: workflow builder, execution, traces, replay/fork")
+    studio.add_argument("--port", type=int, default=8100)
+    studio.add_argument("--data-dir", type=Path, default=None, help="Defaults to data/studio")
     observe = sub.add_parser("observe", help="No-Key local historical observation; execution APIs disabled")
     observe.add_argument("--phoenix-url", default="http://127.0.0.1:6006")
     observe.add_argument("--port", type=int, default=8000)
@@ -92,6 +95,12 @@ def main() -> None:
         from .observation_api import create_observation_app
         uvicorn.run(create_observation_app(endpoint=args.phoenix_url, directory=args.store, port=args.port, catalog_path=args.catalog),
                     host="127.0.0.1", port=args.port, workers=1, reload=False, loop="asyncio")
+        return
+    if args.command == "studio":
+        import uvicorn
+        from .studio.app import create_app as create_studio_app
+        uvicorn.run(create_studio_app(args.data_dir, port=args.port), host="127.0.0.1", port=args.port,
+                    workers=1, reload=False, loop="asyncio", access_log=False)
         return
     if args.command == "serve":
         import uvicorn
