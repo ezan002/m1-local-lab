@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
+from .build_info import capture_build_info
 from .historical_observation import ROOT, HistoryStore, PhoenixHistory, load_catalog
 
 
@@ -24,6 +25,8 @@ class ImportRequest(BaseModel):
 
 def attach_observation(app: FastAPI, store: HistoryStore, token: str, *, execution_enabled=False):
     app.state.history_store = store
+    # Captured once while the app is built; later HEAD changes are not loaded code.
+    app.state.build_info = build = capture_build_info('execution' if execution_enabled else 'observation')
 
     async def call(fn):
         try:
@@ -41,7 +44,7 @@ def attach_observation(app: FastAPI, store: HistoryStore, token: str, *, executi
     @app.get('/api/observation/session')
     async def session():
         return {'csrf_token': token, 'mode': 'execution' if execution_enabled else 'observation',
-                'execution_enabled': execution_enabled, 'phoenix_url': store.endpoint}
+                'execution_enabled': execution_enabled, 'phoenix_url': store.endpoint, 'build': build}
 
     @app.get('/api/observation/health')
     async def health():
@@ -153,7 +156,7 @@ def create_observation_app(*, endpoint='http://127.0.0.1:6006', directory=None,
 
     @app.get('/api/health')
     async def app_health():
-        return {'app': {'status': 'healthy'}, 'mode': 'observation', 'execution_enabled': False}
+        return {'app': {'status': 'healthy'}, 'mode': 'observation', 'execution_enabled': False, 'build': app.state.build_info}
 
     attach_observation(app, store, token)
     return app

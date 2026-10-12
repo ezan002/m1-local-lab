@@ -240,3 +240,44 @@ Set-Location 'C:\projects\m1-local-lab'
 使用现有 Chromium，只读访问原 6006 的现有 Project 和 Who&When Trace；没有重新导入。错误地址真实复现，修正地址正常打开 Project 及 Trace `6a33077cf60d674ab78c4041cd08409a`，截图中可见生成分组和 6 条消息。证据保存于 Git 忽略目录 `data/test-output/phoenix-project-link-check/` 的 `receipt.json`、`reported.png`、`candidate.png`、`candidate-trace.png`。浏览器阻断非回环请求，两次 Phoenix GitHub 星标请求被拦截并产生 `Failed to fetch`，不宣称 Console 全部无错误；此阻断范围是浏览器层，不代表系统或后端网络隔离。
 
 未停止现有应用/Phoenix 服务；当前已运行应用仍使用旧的 Python 链接生成代码，修正将在应用下次重启后生效。现场可先直接打开保留 `==` 的地址继续查看，不需要删除数据或重新导入。浏览器测试退出并关闭自身 Chromium。模型、WebSurfer、外部任务调用均为 0；本次未提交 Git。
+
+## 9. 2026-10-12 日常服务加载修正与运行版本信息
+
+**问题与原因。** 日常 8000 观测进程于 2026-10-11 21:25（本地时间）启动，早于第 8 节的链接修正，修复前其 `/api/observation/health` 仍返回 `.../projects/UHJvamVjdDoxNw%3D%3D/traces`。磁盘代码无需再改链接逻辑；问题是运行进程未加载当前代码。
+
+**受控重启。** 确认该进程命令行为本项目 `.venv` 的 `m1_local.cli observe`（观测模式没有执行任务可中断）后，只结束该 PID 树；Phoenix 用 `stop-phoenix.ps1`（核对所有权回执）和 `start-phoenix.ps1` 重启。观测应用以原参数（`--catalog .\configs\observation-catalog.example.json`）后台启动，PID 写入 `data/pids/observation.pid`，日志位于 `data/logs/observation.{stdout,stderr}.log`。未删除或重建任何数据库、导入记录或 Project。
+
+**运行版本。** 主网页标题下显示“运行版本（进程启动时记录）”，`/api/observation/session` 与 `/api/health` 返回 `build`：
+
+| 字段 | 含义 |
+| --- | --- |
+| `commit` | 进程启动时 `git rev-parse HEAD`；无 Git 或失败为 `unknown` |
+| `uncommitted_changes` | 启动时 `git status --porcelain` 是否非空（含未跟踪文件）；未知为 `unknown` |
+| `started_at` | 进程创建应用的 UTC 时间 |
+| `mode` | `observation` 或 `execution` |
+
+这些值只在启动时取一次（`src/m1_local/build_info.py`），运行期间切换分支或提交不会改变显示，因此“页面版本 ≠ 当前 `git rev-parse HEAD`”即说明需要重启。`uncommitted_changes=true` 时 commit 只能说明基线，不能单独确定加载的代码。不返回环境变量或密钥。
+
+**检查与停止。**
+
+```powershell
+# 看进程加载的版本与当前磁盘 HEAD 是否一致
+(Invoke-RestMethod http://127.0.0.1:8000/api/health).build
+git rev-parse HEAD
+# 停止本次后台启动的观测应用（先核对 PID 是本项目 observe 进程）
+$p = [int](Get-Content .\data\pids\observation.pid -Raw)
+(Get-CimInstance Win32_Process -Filter "ProcessId = $p").CommandLine   # 应含 m1_local.cli observe
+taskkill /PID $p /T /F
+# 停止 Phoenix（有所有权回执）
+& '.\scripts\stop-phoenix.ps1'
+```
+
+之后可按第 5、7 节用 `start-observation.ps1`（前台）重新启动。
+
+**验收（日常 8000/6006，真实 Chromium，两次受控重启后各一次）。** 证据位于 Git 忽略目录 `data/test-output/daily-closure/`（`*-restart1`、`*-restart2`、`no-key-*`），验收器为同目录的 `verify_daily_observation_closure.py`（由先前 `verify_design_goal_acceptance.py` 派生，改为必须通过主网页按钮完成跳转）。
+
+- 三条样本（Who 短样本 6→7、TE 31→32、Who Hand-Crafted 29→30）预览、重复导入、逐项原文/API/Phoenix 比对、刷新保持选择均通过；Project Span 总数前后均为 69，导入时间未被改写。
+- 主网页“打开本条 Phoenix Trace”三次与“打开对应 Phoenix Project”一次均直接打开 `.../projects/UHJvamVjdDoxNw==/...`，渲染 Trace Details，未出现 `projectId not found in path`；Project All Time 显示 3 条 Trace。
+- 观测模式 `POST /api/runs`、`/resume`、`/replay`、`/fork` 与 `GET /execution` 均为 403。
+- 独立无 Key 启动（18002，子进程模型 Key 均为空）通过，临时进程已结束。
+- 主网页 Console/page error/失败请求/HTTP 错误均为 0。每个 Phoenix 页面仍各有 1 条 `Failed to fetch`：来自 Phoenix 侧栏 “Star on GitHub” 对 `https://api.github.com/repos/Arize-ai/phoenix` 的请求，被验收浏览器的非回环拦截阻断；这与已修复的 Project ID 编码错误是两个独立原因，不影响本地 Trace 显示。

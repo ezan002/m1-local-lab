@@ -214,3 +214,27 @@ def test_phoenix_project_link_preserves_base64_padding(source, tmp_path, monkeyp
         health = client.get('/api/observation/health').json()
     assert health['phoenix'] == 'healthy'
     assert health['project_url'] == 'http://127.0.0.1:6006/projects/' + project_id + '/traces'
+
+
+def test_build_info_is_captured_once_and_reports_unknown_without_git(source, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    import m1_local.build_info as build_info
+    from m1_local.observation_api import create_observation_app
+
+    assert build_info.capture_build_info('observation', root=tmp_path)['commit'] == 'unknown'
+    assert build_info.capture_build_info('observation', root=tmp_path)['uncommitted_changes'] == 'unknown'
+    answers = iter(['a' * 40 + '\n', ' M src/x.py\n'])
+    monkeypatch.setattr(build_info, '_git', lambda *args, root: next(answers))
+    monkeypatch.setenv('OPENAI_API_KEY', 'sk-test-secret-value')
+    store = HistoryStore('http://127.0.0.1:6006', tmp_path / 'ledger', source, Remote())
+    with TestClient(create_observation_app(store=store), base_url='http://127.0.0.1:8000') as client:
+        # Any later Git call would raise StopIteration; the process keeps its start-time facts.
+        monkeypatch.setattr(build_info, '_git', lambda *args, root: 'b' * 40)
+        session = client.get('/api/observation/session')
+        health = client.get('/api/health').json()
+    build = session.json()['build']
+    assert build == health['build']
+    assert build['commit'] == 'a' * 40 and build['uncommitted_changes'] is True
+    assert build['mode'] == 'observation' and build['started_at']
+    assert set(build) == {'commit', 'uncommitted_changes', 'started_at', 'mode', 'captured'}
+    assert 'sk-test-secret-value' not in session.text

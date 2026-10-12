@@ -143,6 +143,7 @@ def create_app(
         return {
             "app": {"status": "healthy"},
             "phoenix": {"status": "healthy" if warning is None else "unavailable", "warning": warning},
+            "build": app.state.build_info,
         }
 
     @app.get("/api/runs")

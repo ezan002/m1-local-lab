@@ -113,6 +113,10 @@ action(async () => {
   const session = await request("/session"); observation.csrf = session.csrf_token;
   el("mode").textContent = session.execution_enabled ? "执行模式服务 · 当前页面仅观测历史；本地任务在次级入口" : "本地观测模式 · 无需 API Key · 后端已禁止执行";
   el("execution").hidden = !session.execution_enabled;
+  const b = session.build || {};
+  const dirty = b.uncommitted_changes === true ? "有未提交改动" : b.uncommitted_changes === false ? "无未提交改动" : "改动状态未知";
+  el("build").textContent = `运行版本（进程启动时记录）：commit ${b.commit && b.commit !== "unknown" ? b.commit.slice(0, 12) : "未知"} · ${dirty} · 启动 ${b.started_at || "未知"} · 模式 ${b.mode || "未知"}`;
+  el("build").title = b.commit || "未知";
   for (const s of await request("/samples")) { const option = text(el("sample"), "option", `${s.source} · ${s.label} · ${s.available ? "本机已有" : "源文件缺失或越界"}`); option.value = s.sample; option.disabled = !s.available; }
   await refresh(); const selected = localStorage.getItem("m1-observation-selection"); if (selected) await select(selected);
 });

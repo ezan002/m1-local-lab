@@ -17,3 +17,4 @@
 #error { padding:14px; color:#852424; background:#fff0ee; }
 .observation [hidden] { display:none !important; }
 @media(max-width:900px) { .obs-layout { grid-template-columns:1fr; } .obs-header { flex-direction:column; } }
+.obs-build { font-size:13px; color:#5b6b7b; margin:4px 0 0; word-break:break-all; }
