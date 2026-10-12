@@ -153,6 +153,10 @@ function Editor({ workflowId }) {
         <span className="spacer" />
         {selectedRunRecord && ["running", "queued"].includes(selectedRunRecord.status) && <button onClick={() => control("pause")}><Icon name="pause" /> Pause</button>}
         {selectedRunRecord && ["paused", "failed", "interrupted", "cancelled"].includes(selectedRunRecord.status) && <button onClick={() => control("resume")}><Icon name="play" /> {selectedRunRecord.status === "failed" ? "Retry from failure" : "Resume"}</button>}
+        <button className="danger" title="Delete workflow (runs keep their own definition snapshot)" onClick={async () => {
+          if (!window.confirm(`Delete workflow “${wf.name}”? Its historical runs stay available.`)) return;
+          try { await api(`/api/workflows/${workflowId}`, { method: "DELETE" }); window.location.hash = "#/workflows"; } catch (e) { setError(e); }
+        }}><Icon name="trash" /></button>
         <button onClick={save} disabled={saving || !dirty}><Icon name="save" /> {saving ? "Saving…" : "Save"}</button>
         <button className="primary" onClick={() => setShowRun(true)} disabled={issues.length > 0} title={issues.length ? "Fix validation issues first" : "Run this workflow"}><Icon name="play" /> Run</button>
       </div>

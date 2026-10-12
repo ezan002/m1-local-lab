@@ -223,3 +223,33 @@ async def test_start_defaults_are_resolved_into_inputs(env):
     assert run["output"] == {"large": "LARGE: 12 * (7 + 5) = 144"}  # template reads input.expression
     with pytest.raises(ValueError, match="unknown inputs"):
         await engine.start_run(wf, {"nope": "1"})
+
+
+async def test_cancel_running_run_then_resume(env, monkeypatch):
+    import asyncio
+
+    store, engine, _ = env
+    original = engine.deterministic.chat
+    gate = {"slow": True}
+
+    async def slow_chat(*args, **kwargs):
+        if gate["slow"]:
+            await asyncio.sleep(30)
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(engine.deterministic, "chat", slow_chat)
+    wf = store.get_workflow(RESEARCH_ID)
+    run = await engine.start_run(wf, {"topic": "t", "audience": "a"}, provider_override="deterministic")
+    for _ in range(100):
+        if any(s["kind"] == "llm" for s in store.spans(run["id"])):
+            break
+        await asyncio.sleep(0.02)
+    await engine.cancel(run["id"])
+    cancelled = store.get_run(run["id"])
+    assert cancelled["status"] == "cancelled" and not engine.is_active(run["id"])
+    planner = next(s for s in store.spans(run["id"]) if s["node_id"] == "planner" and s["kind"] == "agent")
+    assert planner["status"] == "cancelled"
+    assert not [s for s in store.spans(run["id"]) if s["status"] == "running"]  # no span left open
+    gate["slow"] = False
+    await engine.resume(run["id"], wait=True)
+    assert store.get_run(run["id"])["status"] == "completed"

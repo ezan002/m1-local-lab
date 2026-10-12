@@ -1,5 +1,30 @@
 # M1 Local Lab
 
+## Agent Studio V1 (current product)
+
+A local-first studio to **build, run, observe and debug multi-agent workflows**, plus read-only observation of
+agents built elsewhere (OpenTelemetry).
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1   # once (Python 3.11 venv)
+.\scripts\start-studio.ps1                                                      # http://127.0.0.1:8100
+```
+
+- No Node.js needed to run (the built UI is committed in `web/studio/`). Rebuild UI: `cd frontend; npm install; npm run build`.
+- Real model calls use an OpenAI-compatible endpoint: set `OPENAI_API_KEY` (optional `OPENAI_BASE_URL`,
+  `STUDIO_DEFAULT_MODEL`, default `gpt-4.1-mini`). Without a key, use the **deterministic** provider (scripted,
+  labeled everywhere; not model evidence).
+- Data: `data/studio/` (SQLite workflows/runs/spans + LangGraph checkpoints). Survives restarts.
+- External agents: export OTLP/HTTP to `http://127.0.0.1:8100/v1/traces`; example in `examples/external_agent/`.
+
+Demo, architecture, feature matrix and limitations: [docs/V1_DELIVERY_REPORT.md](docs/V1_DELIVERY_REPORT.md).
+Test evidence: [docs/V1_VALIDATION_REPORT.md](docs/V1_VALIDATION_REPORT.md).
+
+---
+
+## Legacy research tools (still available)
+
+
 当前主线（2026-10-10）：**无 Key 的本地外部历史轨迹观测**。选择已有获准样本，预览、脱敏导入独立 Phoenix Project，再从步骤定位原记录。使用 `scripts/start-observation.ps1`；指南、版本能力及本轮证据见 [本地历史观测](docs/historical-observation.md)。它不调用模型，后端禁止执行/Resume/Replay/Fork；原任务系统保留在显式 `serve` 模式的 `/execution`，旧归因界面通过 `/execution?research=1` 恢复。下文的旧执行与研究说明不代表观测模式需要 Key。
 
 接入更多同格式记录可通过启动参数 `-Catalog .\configs\observation-catalog.example.json` 注册本机文件，不必修改适配器代码；示例添加本机已有 Hand-Crafted 样本，没有包含原始数据，也不会下载缺失文件。支持格式、路径边界与使用方法见[样本清单](docs/historical-observation.md#7-同格式多样本接入后续迭代)。

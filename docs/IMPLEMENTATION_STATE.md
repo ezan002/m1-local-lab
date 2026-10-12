@@ -39,8 +39,22 @@ Verified (manual smoke, real server on 8100 with `data/studio-dev`):
 - external agent launched via API: deterministic ok / `--fail-tool` error captured (exception + stack) /
   real OpenAI ok; external runs reject resume (409) and report checkpoints unsupported.
 
+### Milestone 2 — frontend (DONE, browser-verified)
+`frontend/` (React 18 + @xyflow/react 12 + Vite 6) built to `web/studio/` (committed). Pages: Workflows,
+Editor (palette, canvas, inspector, validate, save, run dialog w/ provider + breakpoints, live overlay),
+Runs, Run detail (graph, timeline, spans drill-down, checkpoints + fork/replay, compare, I/O), External traces,
+Integrations (launch agent, OTLP instructions), Settings. Bugs found+fixed in browser: fitView timing, cached
+index.html, stale CSRF after server restart, visit counting, inherited nodes in forks/compare.
+
+### Milestone 3 — tests and evidence (DONE)
+- `tests/studio/` 30 tests (schema, engine on real LangGraph+SQLite, API+OTLP protobuf from real OTel SDK,
+  real server subprocess e2e incl. restart). Full suite: 199 passed / 3 skipped (before start-defaults test).
+- `scripts/verify_studio_ui.py` -> `docs/evidence/v1/ui/` PASS, 0 console/page/network errors.
+- `scripts/validate_v1_real_model.py` -> `docs/evidence/v1/real-model/receipt.json` PASS (5 checks, gpt-4.1-mini).
+  Found+fixed: start defaults not propagated into `input.*` (real bug).
+
 ## Next actions
 
-1. Frontend (React + Vite + @xyflow/react) in `frontend/`, build to `web/studio/`.
-2. Automated tests `tests/studio/` (engine, API, OTLP, restart recovery) using temp dirs.
-3. Browser validation + docs (V1_VALIDATION_REPORT.md, V1_DELIVERY_REPORT.md).
+1. `scripts/start-studio.ps1`, README section, delete-workflow button.
+2. `docs/V1_VALIDATION_REPORT.md`, `docs/V1_DELIVERY_REPORT.md` (completion matrix).
+3. Final regression (full pytest + UI script), launch daily Studio on 8100 with `data/studio`.

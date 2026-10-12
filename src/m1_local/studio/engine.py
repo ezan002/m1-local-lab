@@ -240,6 +240,9 @@ class StudioEngine:
             except ToolError as exc:
                 self.store.end_span(child, status="error", error={"type": "ToolError", "message": str(exc)})
                 raise
+            except asyncio.CancelledError:
+                self.store.end_span(child, status="cancelled", error={"type": "CancelledError", "message": "run cancelled during the tool call"})
+                raise
             self.store.end_span(child, status="ok", output=result)
             return result, {"tool": cfg.tool, "arguments": args}, {"tool": cfg.tool}
         if node.type == "condition":
@@ -294,6 +297,9 @@ class StudioEngine:
             except (ProviderError, TemplateError) as exc:
                 self.store.end_span(llm_span, status="error", error={"type": type(exc).__name__, "message": str(exc)})
                 raise
+            except asyncio.CancelledError:
+                self.store.end_span(llm_span, status="cancelled", error={"type": "CancelledError", "message": "run cancelled during the model call"})
+                raise
             for k, v in (result.usage or {}).items():
                 if isinstance(v, int):
                     usage_total[k] = usage_total.get(k, 0) + v
@@ -325,6 +331,9 @@ class StudioEngine:
                     except ToolError as exc:
                         payload = {"error": str(exc)}
                         self.store.end_span(tool_span, status="error", error={"type": "ToolError", "message": str(exc)})
+                    except asyncio.CancelledError:
+                        self.store.end_span(tool_span, status="cancelled", error={"type": "CancelledError", "message": "run cancelled during the tool call"})
+                        raise
                 tool_log.append({"name": call["name"], "arguments": args, "result": payload})
                 messages.append({"role": "tool", "tool_call_id": call["id"], "content": json.dumps(payload, ensure_ascii=False)})
         raise ProviderError(f"agent {node.id} exceeded max_tool_rounds={cfg.max_tool_rounds} without a final answer")
