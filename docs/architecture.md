@@ -1,5 +1,30 @@
 # 架构与执行语义
 
+## 2026-10-10：历史观测主线
+
+最新目标见[产品方向](product-direction.md)。以下执行系统章节保留，适用于显式执行模式，不是历史导入的恢复能力。
+
+```mermaid
+flowchart LR
+  FILE[本机白名单原文件·只读] --> AD[校验 / 规范化 / 脱敏]
+  AD --> PRE[预览及稳定身份]
+  PRE --> LEDGER[独立导入日志·写前记录]
+  LEDGER --> API[Phoenix公开HTTP API]
+  API --> PH[独立历史Project]
+  PH --> VERIFY[分页读回·逐Span核对]
+  LEDGER --> UI[原生观测页面·步骤按需展开]
+  VERIFY --> UI
+  UI --> LINK[对应Phoenix Trace / Project及Trace ID]
+```
+
+`cli observe` → `observation_api.create_observation_app` 不读取 `.env`，不初始化 `AgentRuntime`、Gateway、WebSurfer 或归因 reader，不打开旧运行数据库。后端对 `/api/runs*` 和 `/execution` 返回 403。静态旧页面即使被直接访问，也无法借此执行。原 `cli serve` 保留执行系统：`/` 改为历史观测，`/execution` 是次级执行入口，`/execution?research=1` 显式恢复旧归因 UI；默认不发归因请求。
+
+历史白名单默认包含两条已有本地样本；`observe --catalog` 可在启动时登记最多 32 条额外同格式记录。清单使用显式 source、版本、来源 URL、许可说明、相对 JSON 文件路径，不探测任意格式。只支持 Who&When 单条 JSON 与 TraceElephant 元数据/步骤 JSON 对；版本标为启动者声明，未自动认证。数据文件始终限制在 `data/external`（测试可用隔离根目录）；拒绝路径穿越、绝对路径、Windows ADS 与解析后越界。清单加载后不会自动热更新，不能覆盖两个内置 ID。网页仍不接受文件路径、URL 或上传执行。
+
+`historical_observation.py` 在冻结 `external_datasets.py` 之外建独立展示适配器，不修改基准预处理。来源消息用 UNKNOWN Span；只有结构化 ChatCompletion 响应证据才用 LLM；工具声明不自动成为 TOOL Span。根分组和父边标记为导入器生成。缺 name 的消息显示“原记录角色：role”，不把 role 推定为 Agent 标准身份。未知时间用固定 2000-01-01 坐标，真实耗时与费用仍为 null；Project 不参与实时性能比较。
+
+导入日志在独立 `data/observation/`，原文件只读。先验证 SHA256/预览身份，持有目录跨进程锁，读回已存在 Span，写前保存 attempted，再发送未尝试且缺失的 Span，核对全部脱敏属性、身份、父级、kind、状态、时间。不把 202 当持久化成功。不确定写入只允许再次核对，不盲目重发；详见[映射、恢复限制与本轮验收](historical-observation.md)。本轮不创建历史 checkpoint，也不接入实时第三方 Agent。
+
 审查修正：所有进程内 checkpoint 写入入口（包括 Fork）在首个 `await` 前预留准入；暂停通知不再被当成新节点提交，输入 checkpoint 来自真实 `parent_config`；根 span 结束后统一 flush。未初始化的 `__start__` 快照不可 Replay/Fork。应用 OTel 使用独立 exporter 脱敏 SDK 异常和序列化摘要，不修改归因冻结预处理。导师部署收尾增加数据库进程所有权锁、仅 HTTP 的 Phoenix 启动入口及独立历史导出安全视图；验证证据与预算计数等残余问题见 [审查报告](full-project-audit-optimization.md)。
 
 ## Attribution benchmark v1 旁路

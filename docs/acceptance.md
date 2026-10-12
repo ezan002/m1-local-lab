@@ -1,5 +1,28 @@
 # 实机验收记录
 
+## 同格式多样本接入（2026-10-10 后续迭代）
+
+- PASS：启动者通过 `observe --catalog` 或 PowerShell `-Catalog` 登记更多 Who&When/TraceElephant 文件，无须改适配器；网页仍只接受注册 ID，不接受任意路径。样本版本明确标为提供者声明。
+- PASS：第三条已有 Hand-Crafted 样本 29 条消息全部保留，导入 30 个 Span（含展示分组）。与原两条一起验证重复导入、刷新、双服务重启、原始文件哈希不变；原两条 Trace ID 不变。
+- PASS：完整离线回归 **166 passed, 3 skipped in 77.32s**；定向 48 passed, 1 skipped。三个 skip 包括两个真实模型测试，以及系统不允许 fixture 软链接创建的路径测试；普通越界路径测试通过，不能把软链接情形写成已实测通过。
+- PARTIAL：Phoenix 原生 GitHub 星标请求仍被离线边界拦截；本地核心功能正常。未改依赖、不重复安装环境；本轮未重复 pip check。
+- 新清单样例仅含来源声明及相对路径，不含原始轨迹；旧研究代码、协议、manifest、冻结结果不变。细节、命令和最新截图见[报告第 7 节](historical-observation.md#7-同格式多样本接入后续迭代)。
+
+## 外部历史观测（2026-10-10，本轮）
+
+范围和证据见[本地历史观测报告](historical-observation.md)，最新目标见[产品方向](product-direction.md)。以下本轮结果不改写后面的历史验收。
+
+- PASS：真实 Who&When 6 条消息与 TraceElephant 31 条记录均完整保留，分别导入 7/32 Span（含明确的导入分组），逐项公开 API 读回核对。无虚构 LLM/工具调用、原始父子关系或可恢复 checkpoint。
+- PASS：无 Key 独立观测模式、后端禁止执行、真实浏览器选样/预览/导入/详情/刷新、重复导入不增量、双服务重启持久化；主网页 Console/Network 错误均为 0。
+- PARTIAL：Phoenix 原生 GitHub 星标外联被测试拦截，产生 Failed to fetch；本地 Trace 功能可用，但不能称完全无外联或全部浏览器零错误。原生费用/耗时显示必须结合“真实值未知”标记理解。
+- PARTIAL：源数据不是完整可恢复 runtime 捕获；永久丢失已尝试队列的强制恢复协议未实现，当前保守防重复并报告缺失。
+- PASS：Windows 完整离线回归 147 passed, 2 skipped；最新定向 29 passed；前端行为 4 passed；双环境 pip check 通过。2 个 skip 是真实模型/WebSurfer 条件测试，本轮这些调用均为 0。
+- 未修改冻结归因协议、manifest、30×3 结果或锁依赖；不下载数据，不提交，不部署到云端。隔离验收只使用新测试数据库；原 Phoenix 服务保持原状。
+
+```powershell
+& '.\.venv\Scripts\python.exe' -B scripts/verify_historical_observation.py --app-port 18000 --phoenix-port 16006
+```
+
 2026-09-12 全仓工程审查的离线结果、环境阻塞及残余风险见 [审查报告](full-project-audit-2026-09-12.md)。以下各节保留其历史验收日期及当时结果，不代表本次重新运行了真实模型、浏览器或 Phoenix 验收。
 
 ## Attribution benchmark protocol v1（2026-09-10）

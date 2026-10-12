@@ -69,6 +69,10 @@ def test_local_host_origin_csrf_and_run_api(settings, monkeypatch):
     with TestClient(app, base_url="http://127.0.0.1:8000") as client:
         page = client.get("/")
         assert page.status_code == 200
+        assert "外部轨迹" in page.text
+        assert 'id="sample"' in page.text
+        page = client.get("/execution")
+        assert page.status_code == 200
         assert "新任务" in page.text
         assert "本地 Magentic-One 控制台" in page.text
         assert "\ufffd" not in page.text

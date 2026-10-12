@@ -75,6 +75,11 @@ def parser() -> argparse.ArgumentParser:
     dataset.add_argument("path")
     dataset.add_argument("--limit", type=int, required=True, help="Explicit cost-control limit")
     serve = sub.add_parser("serve")
+    observe = sub.add_parser("observe", help="No-Key local historical observation; execution APIs disabled")
+    observe.add_argument("--phoenix-url", default="http://127.0.0.1:6006")
+    observe.add_argument("--port", type=int, default=8000)
+    observe.add_argument("--store", type=Path, default=None, help="Dedicated import journal directory")
+    observe.add_argument("--catalog", type=Path, default=None, help="Operator-owned JSON allowlist; data files remain under data/external")
     return result
 
 
@@ -82,6 +87,12 @@ def main() -> None:
     args = parser().parse_args()
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    if args.command == "observe":
+        import uvicorn
+        from .observation_api import create_observation_app
+        uvicorn.run(create_observation_app(endpoint=args.phoenix_url, directory=args.store, port=args.port, catalog_path=args.catalog),
+                    host="127.0.0.1", port=args.port, workers=1, reload=False, loop="asyncio")
+        return
     if args.command == "serve":
         import uvicorn
         settings = Settings()

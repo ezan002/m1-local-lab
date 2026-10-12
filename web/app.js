@@ -1051,7 +1051,7 @@ function activateTab(tab) {
 
 function setupTabs() {
   document.querySelectorAll('[role="tablist"]').forEach(tablist => {
-    const tabs = [...tablist.querySelectorAll('[role="tab"]')];
+    const tabs = [...tablist.querySelectorAll('[role="tab"]')].filter(tab => !tab.hidden);
     tabs.forEach((tab, index) => {
       tab.addEventListener("click", () => activateTab(tab));
       tab.addEventListener("keydown", event => {
@@ -1102,6 +1102,8 @@ function bindActions() {
 }
 
 async function initialize() {
+  // Explicit research entry only; no attribution fetch at default startup.
+  if (new URLSearchParams(window.location.search).get("research") === "1") byId("tab-attribution-main").hidden = false;
   bindActions();
   try {
     const session = await api("/api/session");

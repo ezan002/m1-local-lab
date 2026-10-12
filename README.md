@@ -1,5 +1,9 @@
 # M1 Local Lab
 
+当前主线（2026-10-10）：**无 Key 的本地外部历史轨迹观测**。选择已有获准样本，预览、脱敏导入独立 Phoenix Project，再从步骤定位原记录。使用 `scripts/start-observation.ps1`；指南、版本能力及本轮证据见 [本地历史观测](docs/historical-observation.md)。它不调用模型，后端禁止执行/Resume/Replay/Fork；原任务系统保留在显式 `serve` 模式的 `/execution`，旧归因界面通过 `/execution?research=1` 恢复。下文的旧执行与研究说明不代表观测模式需要 Key。
+
+接入更多同格式记录可通过启动参数 `-Catalog .\configs\observation-catalog.example.json` 注册本机文件，不必修改适配器代码；示例添加本机已有 Hand-Crafted 样本，没有包含原始数据，也不会下载缺失文件。支持格式、路径边界与使用方法见[样本清单](docs/historical-observation.md#7-同格式多样本接入后续迭代)。
+
 工程审查、导师部署验证及尚未解决的边界见 [完整审查报告](docs/full-project-audit-optimization.md)。
 
 ## Who&When 归因基准 v1
@@ -149,8 +153,8 @@ JSONL 每行包含 `case_id`、`task`、可选 `allowed_files` 和 `metadata`。
 
 隔离的项目 Chromium 验收已能运行。当前 Phoenix 11.35.0 的 GitHub 星标组件仍会发起外部请求；在阻止外部请求的严格验收中产生页面错误，整体网页验收为 PARTIAL，详情见审查报告。
 
-- 应用和 Phoenix HTTP 默认绑定 `127.0.0.1`，API 校验 Host、Origin 和 CSRF；不建立公网隧道。Phoenix 11.35 的 gRPC 仍绑定 `[::]:4317`，现有脚本尚未解决此额外监听边界，不能据 HTTP 地址宣称整个服务仅回环。
-- 同一组运行数据库只能由一个 runtime 进程使用。网页服务运行期间不要同时使用 CLI run/history/resume/replay/fork/dataset；第二个 runtime 会把已有活跃记录误判为中断，目前没有跨进程租约。
+- 应用和 Phoenix HTTP 默认绑定 `127.0.0.1`，API 校验 Host、Origin 和 CSRF；不建立公网隧道。项目 Phoenix 启动脚本已对锁定的11.35.0关闭未使用的 gRPC；不要用旧版本“未解决通配监听”的结论代替当前脚本。
+- 同一组运行数据库只能由一个 runtime 进程使用，已有跨进程所有权锁；第二个 API/CLI 会被拒绝，不会误改活跃记录。观测模式不初始化 runtime，也不打开这些运行数据库。
 - WebSurfer 对导航站点、公开 IP 和 URL scheme 做代码校验；公开静态资源可来自非导航白名单主机。登录、上传、支付等主要由提示词约束，尚无完整 HTTP 方法/表单动作强制隔离；网页文字按不可信数据处理。
 - 文件 worker 只读显式允许目录下的 `.txt`、`.md`、`.csv`，并检查解析后的真实路径和大小。
 - coder 只写 `unexecuted_code` 产物，`ENABLE_CODE_EXECUTION=false` 是强制默认值。

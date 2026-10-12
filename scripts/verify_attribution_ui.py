@@ -258,7 +258,7 @@ def _exercise_page(
             server_errors.append(f"{response.status} {response.url}")
 
     page.on("response", record_response)
-    page.goto("/", wait_until="networkidle")
+    page.goto("/execution?research=1", wait_until="networkidle")
     page.locator("#tab-attribution-main").click()
     page.locator("#attribution-content").wait_for(state="visible")
     _wait_cases(page, 9)

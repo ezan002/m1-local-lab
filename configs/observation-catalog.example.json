@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "samples": [
+    {
+      "sample": "who-hand",
+      "label": "Hand-Crafted 历史样本",
+      "source": "Who&When",
+      "version": "59b9fcba1aaed7bbf206b5f4d3c68b8face2f49c",
+      "url": "https://huggingface.co/datasets/Kevin355/Who_and_When",
+      "license": "Local research only; separate dataset license not declared",
+      "files": ["who-and-when/hand-crafted-1.json"]
+    }
+  ]
+}

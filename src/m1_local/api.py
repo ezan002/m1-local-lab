@@ -82,10 +82,15 @@ def create_app(
             yield
         finally:
             await engine.shutdown()
+            history_store.remote.client.close()
 
     app = FastAPI(title="M1 Local Lab", lifespan=lifespan)
     app.state.runtime = engine
     app.state.csrf_token = csrf_token
+    from .historical_observation import HistoryStore
+    from .observation_api import attach_observation
+    history_store = HistoryStore(cfg.phoenix_base_url, cfg.metadata_db.parent / "observation")
+    attach_observation(app, history_store, csrf_token, execution_enabled=True)
     app.state.attribution_reader = attribution_reader or AttributionReadModel(
         cfg.phoenix_base_url,
         dataset_name=cfg.attribution_dataset_name,
@@ -112,6 +117,10 @@ def create_app(
 
     @app.get("/", response_class=FileResponse)
     async def index() -> FileResponse:
+        return FileResponse(web_root / "observation.html")
+
+    @app.get("/execution", response_class=FileResponse)
+    async def execution_index() -> FileResponse:
         return FileResponse(web_root / "index.html")
 
     @app.get("/api/session")

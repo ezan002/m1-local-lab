@@ -1,0 +1,19 @@
+.observation { background: #f3f6fa; color: #20384b; }
+.obs-header { display:flex; justify-content:space-between; gap:24px; padding:24px 32px; background:white; border-bottom:1px solid #dae2ea; }
+.obs-header h1 { font-size:25px; margin:4px 0 10px; }
+.obs-layout { max-width:1500px; margin:auto; padding:24px; display:grid; grid-template-columns:340px minmax(0,1fr); gap:24px; }
+.observation .card { padding:22px; margin-bottom:18px; }
+.observation p { line-height:1.65; overflow-wrap:anywhere; }
+.observation h2 { margin:0 0 16px; font-size:21px; overflow-wrap:anywhere; }
+.observation h3 { margin-top:24px; }
+.observation select { width:100%; margin:10px 0 16px; padding:12px; }
+.observation button,.observation a.button { margin:5px 5px 5px 0; white-space:normal; }
+.observation pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:460px; overflow:auto; background:#f5f7fa; padding:14px; font-size:13px; }
+.observation details { margin:14px 0; }
+.observation summary { cursor:pointer; padding:8px 0; }
+.observation .obs-item { width:100%; text-align:left; padding:12px; border:1px solid #ccd8e2; border-radius:8px; background:white; color:inherit; line-height:1.5; white-space:pre-line; overflow-wrap:anywhere; }
+.obs-item[aria-pressed=true] { border:2px solid #27658d; background:#eef6ff; }
+.obs-warning { padding:12px; border-left:4px solid #c18a24; background:#fff8e9; }
+#error { padding:14px; color:#852424; background:#fff0ee; }
+.observation [hidden] { display:none !important; }
+@media(max-width:900px) { .obs-layout { grid-template-columns:1fr; } .obs-header { flex-direction:column; } }
