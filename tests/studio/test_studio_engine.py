@@ -253,3 +253,16 @@ async def test_cancel_running_run_then_resume(env, monkeypatch):
     gate["slow"] = False
     await engine.resume(run["id"], wait=True)
     assert store.get_run(run["id"])["status"] == "completed"
+
+
+async def test_agent_tool_error_is_returned_to_model_and_recorded(env):
+    store, engine, _ = env
+    wf = store.get_workflow(RESEARCH_ID)
+    researcher = next(n for n in wf["definition"]["nodes"] if n["id"] == "researcher")
+    researcher["config"]["mock_tool_calls"] = [{"name": "calculator", "arguments": {"expression": "1/0"}}]
+    run = store.get_run((await engine.start_run(wf, {"topic": "t", "audience": "a"}, provider_override="deterministic", wait=True))["id"])
+    assert run["status"] == "completed"  # a failing tool call inside an agent loop is fed back, not fatal
+    tool = next(s for s in store.spans(run["id"]) if s["kind"] == "tool" and s["node_id"] == "researcher")
+    assert tool["status"] == "error" and "division by zero" in tool["error"]["message"]
+    second_llm = [s for s in store.spans(run["id"]) if s["kind"] == "llm" and s["node_id"] == "researcher"][1]
+    assert any(m["role"] == "tool" and "division by zero" in m["content"] for m in second_llm["input"]["messages"])

@@ -53,8 +53,18 @@ index.html, stale CSRF after server restart, visit counting, inherited nodes in 
 - `scripts/validate_v1_real_model.py` -> `docs/evidence/v1/real-model/receipt.json` PASS (5 checks, gpt-4.1-mini).
   Found+fixed: start defaults not propagated into `input.*` (real bug).
 
-## Next actions
+### Milestone 4 — delivery (DONE 2026-10-12)
+- `scripts/start-studio.ps1`, README section, delete-workflow button, cancel closes in-flight spans.
+- Final: full pytest 202 passed / 3 skipped; `tests/studio` 32 passed; UI script PASS (0 browser errors);
+  real-model script PASS 5/5; real-model mid-run pause/resume verified on daily server.
+- Reports: `docs/V1_VALIDATION_REPORT.md`, `docs/V1_DELIVERY_REPORT.md` (completion matrix).
+- Daily Studio left running: http://127.0.0.1:8100, data `data/studio`, started via
+  `scripts/restart_studio_dev.ps1 -Port 8100 -DataDir data/studio` (stop: same script stops only an m1_local studio process,
+  or Ctrl+C when started with `start-studio.ps1`).
 
-1. `scripts/start-studio.ps1`, README section, delete-workflow button.
-2. `docs/V1_VALIDATION_REPORT.md`, `docs/V1_DELIVERY_REPORT.md` (completion matrix).
-3. Final regression (full pytest + UI script), launch daily Studio on 8100 with `data/studio`.
+## Next actions (post-V1 backlog, in priority order)
+
+1. Span-level replay (re-issue one LLM call with an edited prompt; show diff) — research requirement not yet met.
+2. Parallel fan-out/join node semantics in the compiler (LangGraph supports it; schema currently forbids).
+3. Optional export of Studio spans to Phoenix/OTLP; show legacy attribution results for external traces.
+4. UI: drag-from-palette, undo/redo, design-time template reference checking.

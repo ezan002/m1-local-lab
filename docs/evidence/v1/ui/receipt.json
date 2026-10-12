@@ -1,7 +1,7 @@
 {
-  "started_at": "2026-10-12T23:17:11.780881+00:00",
-  "base": "http://127.0.0.1:63054",
-  "data_dir": "C:\\Users\\wangy\\AppData\\Local\\Temp\\studio-ui-n2y1wyi7",
+  "started_at": "2026-10-12T23:23:05.039093+00:00",
+  "base": "http://127.0.0.1:53992",
+  "data_dir": "C:\\Users\\wangy\\AppData\\Local\\Temp\\studio-ui-ig7_iiqo",
   "provider": "deterministic (scripted); no model calls",
   "steps": [
     {
@@ -11,7 +11,7 @@
     {
       "step": "editor: add node, connect edges, edit config, save (verified via API)",
       "screenshot": "02-editor-saved.jpg",
-      "workflow_id": "wf_4aae3020a3b8",
+      "workflow_id": "wf_bcbd4301ce29",
       "edges": [
         [
           "assistant",
@@ -34,7 +34,7 @@
     {
       "step": "run detail: span drill-down shows tool input/output",
       "screenshot": "04-run-spans.jpg",
-      "run_id": "run_6aec865ec76c"
+      "run_id": "run_d8022613f111"
     },
     {
       "step": "timeline renders",
@@ -43,7 +43,7 @@
     {
       "step": "fork with edited agent output -> different downstream result; lineage persisted",
       "screenshot": "06-fork-result.jpg",
-      "fork_id": "run_e9b9a292d495"
+      "fork_id": "run_0dbaa0d1a443"
     },
     {
       "step": "fork graph marks inherited nodes",
@@ -71,5 +71,5 @@
   "chromium": "139.0.7258.5",
   "result_note": "http_errors lists every >=400 response seen by the page",
   "status": "PASS",
-  "finished_at": "2026-10-12T23:17:23.692829+00:00"
+  "finished_at": "2026-10-12T23:23:16.274606+00:00"
 }
