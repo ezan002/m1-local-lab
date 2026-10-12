@@ -491,6 +491,7 @@ class StudioEngine:
             origin="studio", thread_id="th_" + uuid.uuid4().hex, definition=source["definition"], input=values.get("input"),
             parent_run_id=run_id, source_checkpoint_id=checkpoint_id, fork_changes=applied, relation=relation,
             provider_mode=source["provider_mode"], capabilities=source["capabilities"], breakpoints=[],
+            inherited={"path": list(values.get("path", [])), "nodes": sorted(values.get("nodes", {}))},
         )
         values["run_id"] = new_run["id"]
         new_cfg = _cfg(new_run["thread_id"])

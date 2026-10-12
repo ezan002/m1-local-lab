@@ -272,15 +272,26 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
             run = _run(run_id)
             nodes: dict[str, Any] = {}
             path = []
-            for span in store.spans(run_id):
-                if span["kind"] in NODE_KINDS and span["node_id"] and span["status"] in {"ok", "error"}:
+            all_spans = store.spans(run_id)
+            roots = {s["id"] for s in all_spans if s["kind"] == "workflow"}
+            for span in all_spans:
+                # Node spans hang directly under the workflow span; llm/tool children share node_id but are not executions.
+                if (span["kind"] in NODE_KINDS and span["node_id"] and span["parent_span_id"] in roots
+                        and span["status"] in {"ok", "error"}):
                     nodes[span["node_id"]] = {"status": span["status"], "output": span["output"], "error": span["error"]}
                     path.append(span["node_id"])
             result[key] = {"id": run_id, "status": run["status"], "relation": run.get("relation"), "parent_run_id": run.get("parent_run_id"),
+                           "inherited": (run.get("inherited") or {}).get("nodes", []),
                            "fork_changes": run.get("fork_changes"), "output": run.get("output"), "executed_path": path, "nodes": nodes}
         ids = sorted(set(result["a"]["nodes"]) | set(result["b"]["nodes"]))
-        result["diff"] = [{"node_id": i, "same": result["a"]["nodes"].get(i, {}).get("output") == result["b"]["nodes"].get(i, {}).get("output"),
-                           "in_a": i in result["a"]["nodes"], "in_b": i in result["b"]["nodes"]} for i in ids]
+        diff = []
+        for i in ids:
+            in_a, in_b = i in result["a"]["nodes"], i in result["b"]["nodes"]
+            inherited = (not in_a and i in result["a"]["inherited"]) or (not in_b and i in result["b"]["inherited"])
+            same = result["a"]["nodes"].get(i, {}).get("output") == result["b"]["nodes"].get(i, {}).get("output")
+            diff.append({"node_id": i, "in_a": in_a, "in_b": in_b,
+                         "verdict": "inherited" if inherited else ("same" if same else "differs"), "same": same and not inherited})
+        result["diff"] = diff
         result["note"] = "Executed path lists node spans recorded in each run; fork runs only record nodes executed after their source checkpoint."
         return result
 
@@ -336,6 +347,6 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
         index = WEB / "index.html"
         if not index.is_file():
             return JSONResponse({"detail": "frontend not built; run: cd frontend && npm install && npm run build"}, status_code=503)
-        return FileResponse(index)
+        return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
     return app

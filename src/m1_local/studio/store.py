@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS runs (
   input TEXT, output TEXT, error TEXT, provider_mode TEXT,
   capabilities TEXT NOT NULL, pause_requested INTEGER NOT NULL DEFAULT 0,
   breakpoints TEXT NOT NULL DEFAULT '[]',
+  inherited TEXT,                  -- fork/replay: path executed before the source checkpoint
   created_at TEXT NOT NULL, started_at TEXT, ended_at TEXT, updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS runs_workflow ON runs(workflow_id, created_at);
@@ -39,7 +40,7 @@ CREATE INDEX IF NOT EXISTS spans_run ON spans(run_id, seq);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
-_JSON_RUN = ("definition", "input", "output", "error", "capabilities", "fork_changes", "breakpoints")
+_JSON_RUN = ("definition", "input", "output", "error", "capabilities", "fork_changes", "breakpoints", "inherited")
 _JSON_SPAN = ("input", "output", "error", "attributes")
 
 
@@ -65,7 +66,9 @@ class StudioStore:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(SCHEMA)
-        self._seq = threading.Lock()
+        columns = {r["name"] for r in self._conn.execute("PRAGMA table_info(runs)")}
+        if "inherited" not in columns:  # additive migration for databases created before this column existed
+            self._conn.execute("ALTER TABLE runs ADD COLUMN inherited TEXT")
 
     def close(self) -> None:
         with self._lock:
