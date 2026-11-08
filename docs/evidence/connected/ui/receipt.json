@@ -1,0 +1,62 @@
+{
+  "started_at": "2026-10-16T01:39:10.522492+00:00",
+  "base": "http://127.0.0.1:50567",
+  "data_dir": "C:\\Users\\wangy\\AppData\\Local\\Temp\\studio-connected-ui-tqr4hmsd",
+  "executor": "m1_local AgentRuntime in its own process on port 50568",
+  "provider": "RuleBasedGateway (deterministic, offline); no model calls",
+  "steps": [
+    {
+      "step": "connect dialog: launch the original executor as a separate process",
+      "screenshot": "01-connect-dialog.jpg"
+    },
+    {
+      "step": "executor process started; graph, capabilities and fork fields read from it",
+      "screenshot": "02-connector-online.jpg"
+    },
+    {
+      "step": "run on the executor mirrored: graph status from its checkpoints",
+      "screenshot": "03-run-graph.jpg",
+      "run_id": "run_453f4f906e6b"
+    },
+    {
+      "step": "timeline + executor's own OTLP spans attached to the run",
+      "screenshot": "04-spans-otlp.jpg"
+    },
+    {
+      "step": "checkpoints read live from the executor, with its editable fields",
+      "screenshot": "05-checkpoints.jpg"
+    },
+    {
+      "step": "fork dialog renders the executor's fork schema",
+      "screenshot": "06-fork-dialog.jpg"
+    },
+    {
+      "step": "fork created by the executor, run, mirrored with lineage",
+      "screenshot": "07-fork-graph.jpg",
+      "fork_id": "run_6f1fe4eb0d0f"
+    },
+    {
+      "step": "compare: planner inherited, coder output differs",
+      "screenshot": "08-compare.jpg"
+    },
+    {
+      "step": "connected runs list shows the branch",
+      "screenshot": "09-connected-list.jpg"
+    },
+    {
+      "step": "executor stopped: mirrored history still readable",
+      "screenshot": "10-offline.jpg"
+    }
+  ],
+  "browser_errors": {
+    "console": [],
+    "page": [],
+    "failed_requests": [],
+    "http_errors": []
+  },
+  "chromium": "139.0.7258.5",
+  "source_checkpoints_after_fork": 8,
+  "notes": "HTTP >= 400 responses are listed; none are expected in this flow.",
+  "status": "PASS",
+  "finished_at": "2026-10-16T01:39:45.598766+00:00"
+}

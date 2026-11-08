@@ -92,10 +92,24 @@ async def test_fork_rejects_invalid_requests(env):
     with pytest.raises(ValueError, match="terminal"):
         await engine.fork(source["id"], terminal["checkpoint_id"], {})
     mid = [c for c in cps if c["after_node"] == "reviewer"][0]
-    for changes, msg in (({"visits.needs_revision": 0}, "not editable"), ({"nodes.final.output": "x"}, "has not executed"),
-                         ({"nodes.needs_revision.output": {"result": True}}, "recomputed"), ({"input.nope": "x"}, "unknown input")):
+    # plan A: at "after reviewer" only the reviewer's own output is editable
+    assert [e["path"] for e in mid["editable"]] == ["nodes.reviewer.output"]
+    for changes, msg in (({"visits.needs_revision": 0}, "not editable"),
+                         ({"nodes.final.output": "x"}, "cannot be edited at the checkpoint after 'reviewer'"),
+                         ({"nodes.planner.output": "earlier node"}, "fork from the checkpoint after that node"),
+                         ({"nodes.needs_revision.output": {"result": True}}, "cannot be edited"),
+                         ({"input.topic": "x"}, "cannot be edited"),
+                         ({"nodes.reviewer.output": "APPROVED", "nodes.researcher.output": "x"}, "cannot be edited")):
         with pytest.raises(ValueError, match=msg):
             await engine.fork(source["id"], mid["checkpoint_id"], changes)
+    # after the Start node the editable result is the run input; after a condition nothing is editable
+    after_start = [c for c in cps if c["after_node"] == "start"][0]
+    assert sorted(e["path"] for e in after_start["editable"]) == ["input.audience", "input.topic"]
+    with pytest.raises(ValueError, match="unknown input|cannot be edited"):
+        await engine.fork(source["id"], after_start["checkpoint_id"], {"input.nope": "x"})
+    after_condition = [c for c in cps if c["after_node"] == "needs_revision" and c["next"]][0]
+    assert after_condition["editable"] == [] and after_condition["forkable"] is True
+    assert terminal["editable"] == []
     with pytest.raises(KeyError):
         await engine.fork(source["id"], "1f00000-not-a-checkpoint", {})
     with pytest.raises(ValueError, match="replay does not accept changes"):

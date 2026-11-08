@@ -93,7 +93,7 @@ def test_local_host_origin_csrf_and_run_api(settings, monkeypatch):
         session = client.get("/api/session")
         assert session.status_code == 200
         csrf = session.json()["csrf_token"]
-        assert session.json()["capabilities"]["fork_fields"] == ["plan", "worker_instruction"]
+        assert session.json()["capabilities"]["fork_fields"] == ["plan", "worker_instruction", "next_agent"]
         health = client.get("/api/health")
         assert health.status_code == 200
         assert health.json()["app"]["status"] == "healthy"

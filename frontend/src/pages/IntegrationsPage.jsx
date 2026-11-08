@@ -41,7 +41,7 @@ export default function IntegrationsPage() {
   const otlp = items.find((i) => i.id === "otlp");
   return (
     <div className="page">
-      <div className="page-head"><div><h1>Integrations</h1><p>Bring agents built outside the Studio. External agents report traces; only Studio workflows support checkpoints, pause/resume and fork.</p></div></div>
+      <div className="page-head"><div><h1>Integrations</h1><p>Bring agents built outside the Studio. Agents on this page report traces only (read-only). LangGraph agents that expose their checkpoints can be debugged with pause/resume and fork under <a href="#/connected">Connected agents</a>.</p></div></div>
       <ErrorBox error={error} />
       <div className="grid-cards" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))" }}>
         {items.filter((i) => i.kind === "executable+trace").map((spec) => <LaunchCard key={spec.id} spec={spec} />)}

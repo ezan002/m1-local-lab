@@ -25,6 +25,10 @@ def checkpoint_id(config: dict[str, Any] | None) -> str | None:
     return ((config or {}).get("configurable") or {}).get("checkpoint_id")
 
 
+
+# Workers the orchestrator may route to (models.RouteDecision.next_agent); editable in a fork after the orchestrator.
+ROUTABLE_AGENTS = frozenset(["web_surfer", "file_reader", "coder", "finalizer"])
+
 class AgentRuntime:
     def __init__(self, settings: Settings, models: ModelGateway | None = None, *, enable_tracing: bool = True) -> None:
         self.settings = settings
@@ -387,7 +391,7 @@ class AgentRuntime:
 
     @staticmethod
     def validate_fork_changes(changes: dict[str, Any]) -> dict[str, Any]:
-        allowed = {"plan", "worker_instruction"}
+        allowed = {"plan", "worker_instruction", "next_agent"}
         invalid = set(changes) - allowed
         if invalid:
             raise ValueError(f"fork fields are not allowed: {sorted(invalid)}")
@@ -400,6 +404,8 @@ class AgentRuntime:
             not isinstance(changes["worker_instruction"], str) or len(changes["worker_instruction"]) > 20_000
         ):
             raise ValueError("worker_instruction must be a string of at most 20000 characters")
+        if "next_agent" in changes and changes["next_agent"] not in ROUTABLE_AGENTS:
+            raise ValueError(f"next_agent must be one of {sorted(ROUTABLE_AGENTS)}")
         return changes
 
     async def current_state(self, run_id: str) -> dict[str, Any]:

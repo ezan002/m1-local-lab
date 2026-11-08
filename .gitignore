@@ -35,6 +35,9 @@ dist/
 *.sqlite-*
 *.db
 *.db-*
+# ...except the bundled demo data set (scripts/build_demo_data.py; no tokens, no private traces)
+!/demo-data/
+!/demo-data/*.sqlite
 
 # Browser/test output and downloaded external repositories or datasets
 .playwright/

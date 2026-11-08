@@ -1,0 +1,43 @@
+{
+  "started_at": "2026-10-16T03:23:22.525044+00:00",
+  "base": "http://127.0.0.1:40125",
+  "data_dir": "/tmp/studio-sdk-ui-v09optt3",
+  "agent": "examples/langgraph_agent/support_agent.py on port 44831 (deterministic)",
+  "steps": [
+    {
+      "step": "connect dialog: attach an SDK agent by URL + token",
+      "screenshot": "01-connect-sdk.jpg"
+    },
+    {
+      "step": "agent online: its graph, fork fields and inputs are read from the SDK",
+      "screenshot": "02-sdk-online.jpg"
+    },
+    {
+      "step": "run mirrored: draft/review loop visible (×2)",
+      "screenshot": "03-sdk-run-graph.jpg",
+      "run_id": "run_27d154a75ec2"
+    },
+    {
+      "step": "fork the first review to APPROVED",
+      "screenshot": "04-sdk-fork-dialog.jpg"
+    },
+    {
+      "step": "branch skips the revision and finalizes",
+      "screenshot": "05-sdk-fork-graph.jpg",
+      "fork_id": "run_e57a4398f069"
+    },
+    {
+      "step": "compare: finalize differs (answer without the revision)",
+      "screenshot": "06-sdk-compare.jpg"
+    }
+  ],
+  "browser_errors": {
+    "console": [],
+    "page": [],
+    "failed_requests": [],
+    "http_errors": []
+  },
+  "chromium": "141.0.7390.37",
+  "status": "PASS",
+  "finished_at": "2026-10-16T03:23:27.362156+00:00"
+}

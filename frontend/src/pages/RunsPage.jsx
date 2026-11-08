@@ -1,14 +1,79 @@
 import React, { useEffect, useState } from "react";
-import { api, duration, fmtTime } from "../api.js";
-import { Badge, Empty, ErrorBox, ProviderBadge, Status } from "../components/ui.jsx";
+import { api, duration, fmtTime, meta } from "../api.js";
+import { Badge, Empty, ErrorBox, Field, Icon, ProviderBadge, Status } from "../components/ui.jsx";
+
+const MAX_FILE = 32 * 1024 * 1024;
+
+// "Import on top, list below" (like Connected agents): bring traces in from a file or live over OTLP/HTTP.
+function TraceImport({ onImported }) {
+  const [endpoint, setEndpoint] = useState("");
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [showLive, setShowLive] = useState(false);
+  useEffect(() => { meta().then((m) => setEndpoint(m.otlp_endpoint)).catch(() => {}); }, []);
+  const upload = async () => {
+    if (!file) return;
+    setError(null); setResult(null);
+    if (file.size > MAX_FILE) { setError(new Error("file too large (limit 32 MB)")); return; }
+    setBusy(true);
+    try {
+      const content = await file.text();
+      const r = await api("/api/traces/import", { method: "POST", body: { filename: file.name, content } });
+      setResult(r);
+      onImported?.();
+    } catch (e) { setError(e); } finally { setBusy(false); }
+  };
+  return (
+    <div className="card card-pad" style={{ marginBottom: 16 }}>
+      <div className="row"><h3 style={{ margin: 0, fontSize: 15 }}>Import traces</h3><Badge tone="ro">read-only</Badge></div>
+      <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+        Traces are OpenTelemetry spans. Upload a file in OTLP JSON format (one request object, an array, or JSON
+        Lines), or a raw trajectory that is converted to spans on import: <b>Codex session</b> (
+        <code>%USERPROFILE%\.codex\sessions\…\rollout-*.jsonl</code>). Agents can also export spans live to the endpoint below.
+      </p>
+      <div className="row" style={{ alignItems: "flex-end" }}>
+        <Field label="Trace file (.json / .jsonl)">
+          <input type="file" accept=".json,.jsonl,.ndjson,application/json" onChange={(e) => { setFile(e.target.files?.[0] || null); setResult(null); setError(null); }} />
+        </Field>
+        <button className="primary" onClick={upload} disabled={!file || busy}><Icon name="plug" /> {busy ? "Importing…" : "Import file"}</button>
+        <button onClick={() => setShowLive(!showLive)}>{showLive ? "Hide" : "Show"} live endpoint (OTLP/HTTP)</button>
+      </div>
+      <ErrorBox error={error} />
+      {result && (
+        <div className="note" style={{ marginTop: 10 }}>
+          Imported {result.accepted} span(s) from {result.filename || "file"}{result.format && result.format !== "otlp" ? ` (converted from ${result.format} format)` : ""}
+          {result.duplicates ? ` · ${result.duplicates} already present` : ""}
+          {result.rejected?.length ? ` · ${result.rejected.length} rejected (${result.rejected[0]})` : ""}.
+          {result.runs?.length > 0 && <> Traces: {result.runs.map((id) => <a key={id} href={`#/runs/${id}`} className="mono" style={{ marginLeft: 8 }}>{id.slice(0, 16)}</a>)}</>}
+        </div>
+      )}
+      {showLive && (
+        <div style={{ marginTop: 12 }}>
+          <Field label="OTLP/HTTP traces endpoint"><input readOnly value={endpoint} onFocus={(e) => e.target.select()} /></Field>
+          <div className="note" style={{ fontSize: 12.5 }}>
+            Python (any framework):
+            <pre style={{ marginTop: 6 }}>{`from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+provider.add_span_processor(BatchSpanProcessor(
+    OTLPSpanExporter(endpoint="${endpoint}")))`}</pre>
+            Or set <code>OTEL_EXPORTER_OTLP_TRACES_ENDPOINT={endpoint}</code>. Recognized attributes: OpenInference
+            (<code>openinference.span.kind</code>, <code>input.value</code>, <code>output.value</code>, <code>agent.name</code>, <code>tool.name</code>);
+            span errors and <code>exception</code> events become failures with stack traces.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function RunsPage({ origin }) {
   const [runs, setRuns] = useState(null);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
+  const load = () => api(`/api/runs?origin=${origin}`).then(setRuns).catch(setError);
   useEffect(() => {
-    const load = () => api(`/api/runs?origin=${origin}`).then(setRuns).catch(setError);
     load();
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
@@ -21,9 +86,10 @@ export default function RunsPage({ origin }) {
       <div className="page-head">
         <div>
           <h1>{external ? "External traces" : "Runs"}</h1>
-          <p>{external ? "Runs reported by external agents over OpenTelemetry. Read-only: no checkpoints or execution control." : "Every execution of a Studio workflow, including forks and replays."}</p>
+          <p>{external ? "Traces of agents built in any framework, imported as OpenTelemetry spans. Read-only: no checkpoints or execution control." : "Every execution of a Studio workflow, including forks and replays."}</p>
         </div>
       </div>
+      {external && <TraceImport onImported={load} />}
       <div className="row" style={{ marginBottom: 12 }}>
         <input placeholder="Search name or id" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 280 }} />
         <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ maxWidth: 180 }}>
@@ -34,7 +100,7 @@ export default function RunsPage({ origin }) {
       <ErrorBox error={error} />
       <div className="card">
         {runs === null ? <div className="empty">Loading…</div> : shown.length === 0 ? (
-          <Empty title="No runs">{external ? "Launch the example agent from Integrations, or export OTLP spans to /v1/traces." : "Open a workflow and press Run."}</Empty>
+          <Empty title="No runs">{external ? "Import a trace file above, or export OTLP spans to the live endpoint." : "Open a workflow and press Run."}</Empty>
         ) : (
           <table className="table">
             <thead><tr><th>Status</th><th>{external ? "Source" : "Workflow"}</th><th>Kind</th><th>Started</th><th>Duration</th><th>Spans</th><th>Error</th></tr></thead>

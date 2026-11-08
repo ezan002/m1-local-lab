@@ -13,17 +13,20 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
 from ..build_info import capture_build_info
+from .connected import ConnectedService, connector_error_status
+from .connectors import CONNECTOR_KINDS, PROTOCOL_VERSION, ConnectorConflict, ConnectorError, ConnectorNotFound
 from .engine import StudioEngine
 from .integrations import INTEGRATIONS, Launcher
-from .otlp import OTLPError, decode_request, ingest
+from .otlp import OTLPError, decode_request, ingest, ingest_file
 from .runtime_support import TOOLS
 from .schema import WorkflowDefinition
 from .seeds import seed
+from .steps import build_steps
 from .store import StudioStore
 
 ROOT = Path(__file__).resolve().parents[3]
 WEB = ROOT / "web" / "studio"
-NODE_KINDS = {"start", "agent", "tool", "condition", "output"}
+NODE_KINDS = {"start", "agent", "tool", "condition", "output", "gate", "node"}
 
 
 class WorkflowBody(BaseModel):
@@ -56,6 +59,49 @@ class LaunchBody(BaseModel):
     params: dict[str, str] = Field(default_factory=dict)
 
 
+class ConnectorBody(BaseModel):
+    kind: Literal["m1_legacy", "studio_executor"] = "m1_legacy"
+    name: str = Field(default="", max_length=120)
+    mode: Literal["attach", "launch"]
+    base_url: str | None = Field(default=None, max_length=200)
+    port: int | None = None
+    model: Literal["rule_based", "openai"] = "rule_based"
+    provider_mode: Literal["openai", "deterministic", "unknown"] = "unknown"
+    token: str | None = Field(default=None, max_length=200)
+
+
+class ConnectedRunBody(BaseModel):
+    inputs: dict[str, str] = Field(default_factory=dict)
+
+
+def tree_order(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Depth-first order: each span before its children, siblings by start time.
+
+    Spans are stored in arrival order. OTLP exporters send a span when it ends, so children of an external trace
+    arrive before their parent; listing them in arrival order put leaves above the agent that called them."""
+    ids = {s["id"] for s in spans}
+    children: dict[str | None, list[dict[str, Any]]] = {}
+    for position, span in enumerate(spans):
+        parent = span.get("parent_span_id") if span.get("parent_span_id") in ids else None
+        children.setdefault(parent, []).append({**span, "_pos": position})
+    ordered: list[dict[str, Any]] = []
+    stack = sorted(children.get(None, []), key=lambda s: (s.get("start_time") or "", s["_pos"]), reverse=True)
+    while stack:
+        span = stack.pop()
+        ordered.append({k: v for k, v in span.items() if k != "_pos"})
+        stack += sorted(children.get(span["id"], []), key=lambda s: (s.get("start_time") or "", s["_pos"]), reverse=True)
+    return ordered
+
+
+class TraceFileBody(BaseModel):
+    filename: str = Field(default="", max_length=300)
+    content: str
+
+
+class ImportBody(BaseModel):
+    remote_run_id: str = Field(min_length=1, max_length=200)
+
+
 def node_catalog() -> list[dict[str, Any]]:
     return [
         {"type": "start", "label": "Start", "description": "Workflow inputs.", "fields": ["inputs"]},
@@ -74,6 +120,7 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
     store = StudioStore(data_dir / "studio.sqlite")
     engine = StudioEngine(store, data_dir / "checkpoints.sqlite")
     launcher = Launcher(store, f"http://127.0.0.1:{port}/v1/traces")
+    connected = ConnectedService(store, studio_port=port, data_root=data_dir / "connected")
     token = secrets.token_urlsafe(32)
     build = capture_build_info("studio")
     hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
@@ -83,12 +130,14 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
         app.state.recovered = await engine.startup()
         if seed_demo:
             seed(store)
+        await connected.startup()
         yield
+        await connected.shutdown()
         await engine.shutdown()
         store.close()
 
     app = FastAPI(title="Agent Studio", lifespan=lifespan)
-    app.state.store, app.state.engine, app.state.launcher = store, engine, launcher
+    app.state.store, app.state.engine, app.state.launcher, app.state.connected = store, engine, launcher, connected
 
     @app.middleware("http")
     async def boundary(request: Request, call_next):
@@ -195,7 +244,7 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
 
     # ------------------------------------------------------------------ runs
     @app.get("/api/runs")
-    async def runs(workflow_id: str | None = None, origin: Literal["studio", "external"] | None = None,
+    async def runs(workflow_id: str | None = None, origin: Literal["studio", "external", "connected"] | None = None,
                    limit: int = Query(200, ge=1, le=1000)) -> list[dict[str, Any]]:
         return store.list_runs(workflow_id=workflow_id, origin=origin, limit=limit)
 
@@ -208,18 +257,33 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
     @app.get("/api/runs/{run_id}")
     async def get_run(run_id: str) -> dict[str, Any]:
         run = _run(run_id)
+        if run["origin"] == "connected" and not connected.is_polling(run_id):
+            try:  # cheap re-sync so a run viewed after a restart reflects the executor's current state
+                run = await connected.sync(run_id)
+            except (ConnectorError, ConnectorNotFound) as exc:
+                run = {**run, "connector_unavailable": str(exc)}
         parent = store.get_run(run["parent_run_id"]) if run.get("parent_run_id") else None
-        return {**run, "active": engine.is_active(run_id), "children": store.children(run_id),
+        return {**run, "active": engine.is_active(run_id) or connected.is_polling(run_id), "children": store.children(run_id),
                 "parent": {"id": parent["id"], "status": parent["status"]} if parent else None}
 
     @app.get("/api/runs/{run_id}/spans")
     async def spans(run_id: str) -> list[dict[str, Any]]:
         _run(run_id)
-        return store.spans(run_id)
+        return tree_order(store.spans(run_id))
+
+    @app.get("/api/runs/{run_id}/steps")
+    async def steps(run_id: str) -> list[dict[str, Any]]:
+        """The run as numbered atomic actions (model calls, tool calls, control nodes); see studio/steps.py."""
+        _run(run_id)
+        return build_steps(tree_order(store.spans(run_id)))
 
     @app.get("/api/runs/{run_id}/checkpoints")
     async def checkpoints(run_id: str) -> dict[str, Any]:
         run = _run(run_id)
+        if run["origin"] == "connected":
+            items = await _control(lambda: connected.checkpoints(run_id))
+            return {"supported": True, "connected": True, "items": items,
+                    "note": "Read live from the agent's own checkpoint store. Fork edits are limited to the fields the agent declares."}
         if run["origin"] != "studio":
             return {"supported": False, "reason": "External runs are trace-only: the source process exposes no checkpoints or control interface.", "items": []}
         return {"supported": True, "items": await engine.checkpoints(run_id)}
@@ -227,14 +291,20 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
     async def _control(call) -> Any:
         try:
             return await call()
+        except (ConnectorError, ConnectorNotFound, ConnectorConflict) as exc:
+            raise HTTPException(connector_error_status(exc), str(exc).strip("'")) from exc
         except KeyError as exc:
             raise HTTPException(404, str(exc).strip("'")) from exc
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
 
+    def _is_connected(run_id: str) -> bool:
+        return _run(run_id)["origin"] == "connected"
+
     @app.post("/api/runs/{run_id}/pause", status_code=202)
     async def pause(run_id: str) -> dict[str, Any]:
-        _run(run_id)
+        if _is_connected(run_id):
+            return await _control(lambda: connected.pause(run_id))
 
         async def call():
             engine.request_pause(run_id)
@@ -243,12 +313,14 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
 
     @app.post("/api/runs/{run_id}/resume", status_code=202)
     async def resume(run_id: str) -> dict[str, Any]:
-        _run(run_id)
+        if _is_connected(run_id):
+            return await _control(lambda: connected.resume(run_id))
         return await _control(lambda: engine.resume(run_id))
 
     @app.post("/api/runs/{run_id}/cancel", status_code=202)
     async def cancel(run_id: str) -> dict[str, Any]:
-        _run(run_id)
+        if _is_connected(run_id):
+            raise HTTPException(409, "the connected executor has no cancel operation; use Pause")
 
         async def call():
             await engine.cancel(run_id)
@@ -257,12 +329,14 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
 
     @app.post("/api/runs/{run_id}/fork", status_code=202)
     async def fork(run_id: str, body: ForkBody) -> dict[str, Any]:
-        _run(run_id)
+        if _is_connected(run_id):
+            return await _control(lambda: connected.fork(run_id, body.checkpoint_id, body.changes, relation="fork"))
         return await _control(lambda: engine.fork(run_id, body.checkpoint_id, body.changes, relation="fork"))
 
     @app.post("/api/runs/{run_id}/replay", status_code=202)
     async def replay(run_id: str, body: ReplayBody) -> dict[str, Any]:
-        _run(run_id)
+        if _is_connected(run_id):
+            return await _control(lambda: connected.fork(run_id, body.checkpoint_id, {}, relation="replay"))
         return await _control(lambda: engine.fork(run_id, body.checkpoint_id, {}, relation="replay"))
 
     @app.get("/api/runs/{a}/compare/{b}")
@@ -309,6 +383,19 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
             return JSONResponse({"detail": "no valid spans", **result}, status_code=400)
         return JSONResponse(result)
 
+    @app.post("/api/traces/import")
+    async def import_traces(body: TraceFileBody) -> dict[str, Any]:
+        """Import a trace file (OTLP JSON / JSON Lines) uploaded from the External traces page."""
+        if len(body.content) > 32 * 1024 * 1024:
+            raise HTTPException(413, "file too large (limit 32 MB)")
+        try:
+            result = ingest_file(store, body.content, body.filename)
+        except OTLPError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        if result["rejected"] and not result["accepted"] and not result["duplicates"]:
+            raise HTTPException(400, f"no valid spans: {result['rejected'][0]}")
+        return {**result, "filename": body.filename}
+
     @app.get("/api/integrations")
     async def integrations() -> list[dict[str, Any]]:
         return [{**v, "kind": "executable+trace"} for v in INTEGRATIONS.values()] + [{
@@ -325,6 +412,58 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
             raise HTTPException(404, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
+
+    # ------------------------------------------------- connected executors
+    @app.get("/api/connector-kinds")
+    async def connector_kinds() -> dict[str, Any]:
+        return {"protocol": PROTOCOL_VERSION, "kinds": list(CONNECTOR_KINDS.values())}
+
+    @app.get("/api/connectors")
+    async def connectors() -> list[dict[str, Any]]:
+        return await connected.list_status()
+
+    @app.post("/api/connectors", status_code=201)
+    async def create_connector(body: ConnectorBody) -> dict[str, Any]:
+        try:
+            record = connected.create_connector(kind=body.kind, name=body.name, mode=body.mode, base_url=body.base_url,
+                                                port=body.port, model=body.model, provider_mode=body.provider_mode,
+                                                token=body.token)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return await connected.status(record["id"])
+
+    @app.get("/api/connectors/{connector_id}")
+    async def connector(connector_id: str) -> dict[str, Any]:
+        return await _control(lambda: connected.status(connector_id))
+
+    @app.delete("/api/connectors/{connector_id}")
+    async def delete_connector(connector_id: str) -> dict[str, Any]:
+        await _control(lambda: connected.delete_connector(connector_id))
+        return {"deleted": connector_id, "note": "mirrored runs stay in the Studio; the agent's own data is untouched"}
+
+    @app.post("/api/connectors/{connector_id}/start", status_code=202)
+    async def start_connector(connector_id: str) -> dict[str, Any]:
+        return await _control(lambda: connected.start_process(connector_id))
+
+    @app.post("/api/connectors/{connector_id}/stop", status_code=202)
+    async def stop_connector(connector_id: str) -> dict[str, Any]:
+        return await _control(lambda: connected.stop_process(connector_id))
+
+    @app.get("/api/connectors/{connector_id}/describe")
+    async def describe_connector(connector_id: str) -> dict[str, Any]:
+        return await _control(lambda: connected.describe(connector_id, refresh=True))
+
+    @app.get("/api/connectors/{connector_id}/remote-runs")
+    async def remote_runs(connector_id: str) -> list[dict[str, Any]]:
+        return await _control(lambda: connected.remote_runs(connector_id))
+
+    @app.post("/api/connectors/{connector_id}/runs", status_code=202)
+    async def start_connected_run(connector_id: str, body: ConnectedRunBody) -> dict[str, Any]:
+        return await _control(lambda: connected.start_run(connector_id, body.inputs))
+
+    @app.post("/api/connectors/{connector_id}/import", status_code=201)
+    async def import_connected_run(connector_id: str, body: ImportBody) -> dict[str, Any]:
+        return await _control(lambda: connected.import_run(connector_id, body.remote_run_id))
 
     @app.get("/api/launches/{launch_id}")
     async def launch_status(launch_id: str) -> dict[str, Any]:

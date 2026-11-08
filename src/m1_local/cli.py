@@ -78,12 +78,31 @@ def parser() -> argparse.ArgumentParser:
     studio = sub.add_parser("studio", help="Agent Studio: workflow builder, execution, traces, replay/fork")
     studio.add_argument("--port", type=int, default=8100)
     studio.add_argument("--data-dir", type=Path, default=None, help="Defaults to data/studio")
+    studio.add_argument("--demo", action="store_true",
+                        help="Open the bundled demo runs: copies demo-data/ to data/studio-demo/ on first use")
     observe = sub.add_parser("observe", help="No-Key local historical observation; execution APIs disabled")
     observe.add_argument("--phoenix-url", default="http://127.0.0.1:6006")
     observe.add_argument("--port", type=int, default=8000)
     observe.add_argument("--store", type=Path, default=None, help="Dedicated import journal directory")
     observe.add_argument("--catalog", type=Path, default=None, help="Operator-owned JSON allowlist; data files remain under data/external")
     return result
+
+
+def _demo_data_dir(target: Path | None) -> Path:
+    """Work on a copy of the committed demo data, so using the demo never changes the files in the repository."""
+    import shutil
+
+    root = Path(__file__).resolve().parents[2]
+    source = root / "demo-data"
+    target = target or root / "data" / "studio-demo"
+    if not (source / "studio.sqlite").exists():
+        raise SystemExit(f"demo data not found at {source}")
+    if not (target / "studio.sqlite").exists():
+        target.mkdir(parents=True, exist_ok=True)
+        for item in source.glob("*.sqlite"):
+            shutil.copy2(item, target / item.name)
+        print(f"Demo data copied to {target}")
+    return target
 
 
 def main() -> None:
@@ -99,7 +118,10 @@ def main() -> None:
     if args.command == "studio":
         import uvicorn
         from .studio.app import create_app as create_studio_app
-        uvicorn.run(create_studio_app(args.data_dir, port=args.port), host="127.0.0.1", port=args.port,
+        data_dir = args.data_dir
+        if args.demo:
+            data_dir = _demo_data_dir(data_dir)
+        uvicorn.run(create_studio_app(data_dir, port=args.port), host="127.0.0.1", port=args.port,
                     workers=1, reload=False, loop="asyncio", access_log=False)
         return
     if args.command == "serve":

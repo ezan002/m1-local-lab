@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS spans (
 );
 CREATE INDEX IF NOT EXISTS spans_run ON spans(run_id, seq);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS connectors (
+  id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL,
+  mode TEXT NOT NULL,              -- attach (agent already running) | launch (Studio starts the agent process)
+  base_url TEXT NOT NULL, config TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
 """
 
 _JSON_RUN = ("definition", "input", "output", "error", "capabilities", "fork_changes", "breakpoints", "inherited")
@@ -69,6 +75,9 @@ class StudioStore:
         columns = {r["name"] for r in self._conn.execute("PRAGMA table_info(runs)")}
         if "inherited" not in columns:  # additive migration for databases created before this column existed
             self._conn.execute("ALTER TABLE runs ADD COLUMN inherited TEXT")
+        if "remote_run_id" not in columns:  # connected runs: the agent's own run id
+            self._conn.execute("ALTER TABLE runs ADD COLUMN remote_run_id TEXT")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS runs_remote ON runs(integration, remote_run_id)")
 
     def close(self) -> None:
         with self._lock:
@@ -213,10 +222,10 @@ class StudioStore:
             if c.execute("SELECT 1 FROM spans WHERE id=?", (span["id"],)).fetchone():
                 return False
             seq = c.execute("SELECT COALESCE(MAX(seq), 0) + 1 FROM spans WHERE run_id=?", (run_id,)).fetchone()[0]
-            c.execute("INSERT INTO spans (id,run_id,trace_id,parent_span_id,node_id,name,kind,status,input,output,error,attributes,start_time,end_time,seq) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            c.execute("INSERT INTO spans (id,run_id,trace_id,parent_span_id,node_id,name,kind,status,input,output,error,attributes,start_time,end_time,checkpoint_id,seq) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                       (span["id"], run_id, span.get("trace_id"), span.get("parent_span_id"), span.get("node_id"), span["name"], span["kind"], span["status"],
                        _dump(span.get("input")), _dump(span.get("output")), _dump(span.get("error")), _dump(span.get("attributes") or {}),
-                       span.get("start_time"), span.get("end_time"), seq))
+                       span.get("start_time"), span.get("end_time"), span.get("checkpoint_id"), seq))
         return True
 
     def spans(self, run_id: str) -> list[dict[str, Any]]:
@@ -227,6 +236,38 @@ class StudioStore:
                 item[key] = _load(item[key])
             result.append(item)
         return result
+
+    def find_remote_run(self, connector_id: str, remote_run_id: str) -> dict[str, Any] | None:
+        rows = self._query("SELECT * FROM runs WHERE origin='connected' AND integration=? AND remote_run_id=?", (connector_id, remote_run_id))
+        return self._run(rows[0]) if rows else None
+
+    # ---- connectors ------------------------------------------------------
+    def save_connector(self, record: dict[str, Any]) -> dict[str, Any]:
+        stamp = now()
+        with self._tx() as c:
+            if c.execute("SELECT 1 FROM connectors WHERE id=?", (record["id"],)).fetchone():
+                c.execute("UPDATE connectors SET name=?, mode=?, base_url=?, config=?, updated_at=? WHERE id=?",
+                          (record["name"], record["mode"], record["base_url"], _dump(record.get("config") or {}), stamp, record["id"]))
+            else:
+                c.execute("INSERT INTO connectors VALUES (?,?,?,?,?,?,?,?)",
+                          (record["id"], record["kind"], record["name"], record["mode"], record["base_url"],
+                           _dump(record.get("config") or {}), stamp, stamp))
+        return self.get_connector(record["id"])  # type: ignore[return-value]
+
+    def get_connector(self, connector_id: str) -> dict[str, Any] | None:
+        rows = self._query("SELECT * FROM connectors WHERE id=?", (connector_id,))
+        if not rows:
+            return None
+        item = dict(rows[0])
+        item["config"] = _load(item["config"])
+        return item
+
+    def list_connectors(self) -> list[dict[str, Any]]:
+        return [self.get_connector(r["id"]) for r in self._query("SELECT id FROM connectors ORDER BY created_at")]  # type: ignore[misc]
+
+    def delete_connector(self, connector_id: str) -> bool:
+        with self._tx() as c:
+            return c.execute("DELETE FROM connectors WHERE id=?", (connector_id,)).rowcount > 0
 
     # ---- settings --------------------------------------------------------
     def get_settings(self) -> dict[str, Any]:

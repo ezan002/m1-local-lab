@@ -25,6 +25,8 @@ const PATHS = {
   chain: "M9 15l6-6M7 17a3 3 0 0 1 0-4l2-2M17 7a3 3 0 0 1 0 4l-2 2",
   external: "M14 4h6v6M20 4l-9 9M18 14v6H4V6h6",
   pauseSpan: "M7 5h3v14H7zM14 5h3v14h-3z",
+  gate: "M5 4v16M19 4v16M5 12h14",
+  edit: "M4 20h4L19 9l-4-4L4 16zM13 7l4 4",
 };
 
 export function Icon({ name, size = 16 }) {

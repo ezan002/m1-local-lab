@@ -133,7 +133,7 @@ def create_app(
                 "resume_statuses": ["paused", "failed", "interrupted"],
                 "active_statuses": ["queued", "running", "pausing"],
                 "terminal_statuses": ["completed", "partial", "failed", "paused", "interrupted"],
-                "fork_fields": ["plan", "worker_instruction"],
+                "fork_fields": ["plan", "worker_instruction", "next_agent"],
             },
         }
 
@@ -144,6 +144,18 @@ def create_app(
             "app": {"status": "healthy"},
             "phoenix": {"status": "healthy" if warning is None else "unavailable", "warning": warning},
             "build": app.state.build_info,
+        }
+
+    @app.get("/api/graph")
+    async def graph_structure() -> dict[str, Any]:
+        """Read-only topology of the compiled LangGraph, for external debuggers such as Agent Studio."""
+        if engine.graph is None:
+            raise HTTPException(503, "runtime has not started")
+        drawable = engine.graph.get_graph()
+        return {
+            "nodes": [{"id": node_id} for node_id in drawable.nodes],
+            "edges": [{"source": edge.source, "target": edge.target, "conditional": bool(edge.conditional)}
+                      for edge in drawable.edges],
         }
 
     @app.get("/api/runs")

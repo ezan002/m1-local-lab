@@ -15,14 +15,20 @@ function spanQuery() {
 export default function RunDetailPage({ runId }) {
   const [run, setRun] = useState(null);
   const [spans, setSpans] = useState([]);
+  const [steps, setSteps] = useState([]);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState(spanQuery() ? "spans" : "graph");
   const [selectedSpan, setSelectedSpan] = useState(spanQuery());
   const [actionError, setActionError] = useState(null);
 
   const load = useCallback(async () => {
-    const [r, s] = await Promise.all([api(`/api/runs/${runId}`), api(`/api/runs/${runId}/spans`)]);
-    setRun(r); setSpans(s);
+    // Sequential on purpose: spans are written before a run's status changes, so spans read after the run are at
+    // least as new. Fetched in parallel, the last poll could show "completed" with the final node still missing.
+    const r = await api(`/api/runs/${runId}`);
+    const s = await api(`/api/runs/${runId}/spans`);
+    const st = await api(`/api/runs/${runId}/steps`).catch(() => []);
+    setRun(r); setSpans(s); setSteps(st);
+    window.dispatchEvent(new CustomEvent("studio:run-origin", { detail: { studio: "runs", connected: "connected", external: "traces" }[r.origin] || "runs" }));
     return r;
   }, [runId]);
 
@@ -48,6 +54,7 @@ export default function RunDetailPage({ runId }) {
   if (!run) return <div className="page muted">Loading…</div>;
   const caps = run.capabilities || {};
   const external = run.origin === "external";
+  const connected = run.origin === "connected";
   const errorSpans = spans.filter((s) => s.status === "error");
 
   return (
@@ -55,13 +62,15 @@ export default function RunDetailPage({ runId }) {
       <div className="run-head">
         <div>
           <div className="row muted" style={{ fontSize: 12.5, marginBottom: 6 }}>
-            <a href={external ? "#/traces" : "#/runs"}>{external ? "External traces" : "Runs"}</a> /
+            <a href={external ? "#/traces" : connected ? "#/connected" : "#/runs"}>{external ? "External traces" : connected ? "Connected agents" : "Runs"}</a> /
             {run.workflow_id && <a href={`#/workflows/${run.workflow_id}`}>{run.workflow_name}</a>}
           </div>
           <h1 className="row">{run.workflow_name || run.integration} <Status value={run.status} /></h1>
           <div className="row" style={{ fontSize: 12.5 }}>
             <span className="mono muted">{run.id}</span>
             {external ? <Badge tone="ro" title="No control channel into the external process">trace-only (read-only)</Badge> : <ProviderBadge mode={run.provider_mode} />}
+            {connected && <Badge tone="accent" title="Runs in its own process; the Studio drives it through its control API">connected executor</Badge>}
+            {connected && run.remote_run_id && <span className="muted">executor run <span className="mono">{run.remote_run_id.slice(0, 13)}…</span></span>}
             {run.workflow_version && <Badge>definition v{run.workflow_version}</Badge>}
             <span className="muted">started {fmtTime(run.started_at || run.created_at)} · {duration(run.started_at, run.ended_at)}</span>
           </div>
@@ -78,14 +87,24 @@ export default function RunDetailPage({ runId }) {
         {!external && (
           <div className="row">
             {["running", "queued"].includes(run.status) && <button onClick={() => act("pause")}><Icon name="pause" /> Pause</button>}
-            {run.active && <button className="danger" onClick={() => act("cancel")}><Icon name="stop" /> Cancel</button>}
-            {["paused", "interrupted", "cancelled"].includes(run.status) && !run.active && <button className="primary" onClick={() => act("resume")}><Icon name="play" /> Resume</button>}
-            {run.status === "failed" && !run.active && <button className="primary" onClick={() => act("resume")} title="Re-executes the failed node from the checkpoint before it"><Icon name="replay" /> Retry failed node</button>}
+            {run.active && caps.cancel !== false && <button className="danger" onClick={() => act("cancel")}><Icon name="stop" /> Cancel</button>}
+            {["paused", "interrupted", "cancelled"].includes(run.status) && (!run.active || connected) && <button className="primary" onClick={() => act("resume")}><Icon name="play" /> Resume</button>}
+            {run.status === "failed" && (!run.active || connected) && <button className="primary" onClick={() => act("resume")} title="Re-executes the failed node from the checkpoint before it"><Icon name="replay" /> Retry failed node</button>}
           </div>
         )}
       </div>
       <ErrorBox error={actionError} />
-      {run.error && (
+      {run.connector_unavailable && <div className="note">The executor is not reachable right now, so this page shows the last synced state. {run.connector_unavailable}</div>}
+      {run.error && run.status !== "failed" && (
+        // External traces: the run succeeded (its root span is ok) but some steps reported errors, e.g. a command an
+        // agent tried that failed. That is information about a step, not a failed run.
+        <div className="note">
+          The run completed, but {run.error.error_span_count || errorSpans.length || 1} step(s) reported an error. First:{" "}
+          <strong>{run.error.node_id || run.error.type}</strong> — {run.error.message}
+          {errorSpans.length > 0 && <> <button className="small" style={{ marginLeft: 8 }} onClick={() => { setTab("spans"); setSelectedSpan(errorSpans[0].id); }}>Inspect error span</button></>}
+        </div>
+      )}
+      {run.error && run.status === "failed" && (
         <div className="error-box">
           <strong>{run.error.type}</strong>{run.error.node_id ? ` in ${run.error.node_id}` : ""}: {run.error.message}
           {run.error.retry && <div style={{ marginTop: 4, opacity: .85 }}>{run.error.retry}</div>}
@@ -98,12 +117,14 @@ export default function RunDetailPage({ runId }) {
       </div>
       <Tabs value={tab} onChange={setTab} tabs={[
         { key: "graph", label: "Graph" }, { key: "timeline", label: "Timeline" }, { key: "spans", label: `Spans (${spans.length})` },
+        { key: "steps", label: `Steps (${steps.length})`, title: "Every model call, tool call and control step, numbered in order" },
         { key: "checkpoints", label: "Checkpoints & fork", disabled: external, title: external ? "External runs expose no checkpoints" : "" },
         { key: "compare", label: "Compare" }, { key: "io", label: "Run input/output" },
       ]} />
       {tab === "graph" && <ReactFlowProvider><RunGraph run={run} spans={spans} onSelect={(id) => { setSelectedSpan(id); setTab("spans"); }} /></ReactFlowProvider>}
       {tab === "timeline" && <Timeline spans={spans} onSelect={(id) => { setSelectedSpan(id); setTab("spans"); }} />}
       {tab === "spans" && <SpanExplorer spans={spans} selected={selectedSpan} onSelect={setSelectedSpan} />}
+      {tab === "steps" && <StepsView steps={steps} spans={spans} onOpenSpan={(id) => { setSelectedSpan(id); setTab("spans"); }} />}
       {tab === "checkpoints" && !external && <Checkpoints run={run} />}
       {tab === "compare" && <Compare run={run} />}
       {tab === "io" && <div className="card card-pad"><Json label="Input" value={run.input} /><Json label="Output" value={run.output} /><Json label="Error" value={run.error} collapsed /></div>}
@@ -113,7 +134,7 @@ export default function RunDetailPage({ runId }) {
 
 function RunGraph({ run, spans, onSelect }) {
   const flow = useMemo(() => {
-    if (run.origin === "studio" && run.definition) {
+    if (run.origin !== "external" && run.definition) {
       const { status, visits } = nodeStatusFromSpans(spans, Object.fromEntries(run.definition.nodes.map((n) => [n.id, n.type])));
       const done = !ACTIVE.has(run.status);
       const inherited = new Set(run.inherited?.nodes || []);
@@ -125,13 +146,14 @@ function RunGraph({ run, spans, onSelect }) {
     const depth = (s) => { let d = 0, cur = s; while (cur.parent_span_id && byId[cur.parent_span_id] && d < 20) { d += 1; cur = byId[cur.parent_span_id]; } return d; };
     const nodes = spans.map((s, i) => ({ id: s.id, type: "wf", position: { x: depth(s) * 260, y: i * 92 },
       data: { id: s.id, nodeType: ["agent", "tool", "llm", "chain"].includes(s.kind) ? s.kind : "external", label: s.name,
-              config: { role: s.node_id || s.kind }, status: s.status === "ok" ? "ok" : s.status } }));
+              config: { role: s.node_id || s.kind, tool: s.attributes?.["tool.name"] || s.node_id || s.name }, status: s.status === "ok" ? "ok" : s.status } }));
     const edges = spans.filter((s) => s.parent_span_id && byId[s.parent_span_id]).map((s) => ({ id: `${s.parent_span_id}-${s.id}`, source: s.parent_span_id, target: s.id }));
     return { nodes, edges };
   }, [run, spans]);
   const nodeSpan = (nodeId) => {
-    if (run.origin !== "studio") return nodeId;
-    const list = spans.filter((s) => s.node_id === nodeId && s.kind !== "llm" && s.kind !== "tool" && s.kind !== "pause");
+    if (run.origin === "external") return nodeId;
+    const type = run.definition.nodes.find((n) => n.id === nodeId)?.type;
+    const list = spans.filter((s) => s.node_id === nodeId && s.kind === type);
     return list.length ? list[list.length - 1].id : null;
   };
   return (
@@ -143,7 +165,8 @@ function RunGraph({ run, spans, onSelect }) {
         </ReactFlow>
       </div>
       <p className="muted" style={{ fontSize: 12.5 }}>
-        {run.origin === "studio" ? "Workflow graph with per-node status from this run (×N = executions in loops; faded = not executed; inherited = result copied from the parent run's checkpoint). Click a node to inspect its latest span."
+        {run.origin === "connected" ? "Graph reported by the connected executor (dashed = conditional route). Status comes from the executor's own checkpoints: each committed checkpoint is one node execution (×N = repeated visits; inherited = executed before the branch point). Click a node to inspect its latest step."
+          : run.origin === "studio" ? "Workflow graph with per-node status from this run (×N = executions in loops; faded = not executed; inherited = result copied from the parent run's checkpoint). Click a node to inspect its latest span."
           : "Span tree reported by the external process (parent → child). Click a node to inspect it."}
       </p>
     </div>
@@ -174,6 +197,91 @@ function Timeline({ spans, onSelect }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+const STEP_KIND_LABEL = { llm: "model call", tool: "tool call", retriever: "retrieval", embedding: "embedding", reranker: "rerank",
+  start: "start", output: "output", condition: "condition", agent: "agent node", node: "node", external: "span" };
+
+function fmtTokens(t) {
+  if (!t || t.total === undefined) return null;
+  return t.prompt !== undefined ? `${t.total} (in ${t.prompt} · out ${t.completion ?? "?"})` : `${t.total}`;
+}
+
+function StepsView({ steps, spans, onOpenSpan }) {
+  const [selected, setSelected] = useState(steps[0]?.step || null);
+  const [kind, setKind] = useState("");
+  const [q, setQ] = useState("");
+  const byId = Object.fromEntries(spans.map((s) => [s.id, s]));
+  const kinds = [...new Set(steps.map((s) => s.kind))];
+  const shown = steps.filter((s) => (!kind || s.kind === kind) && (!q || `${s.step} ${s.name} ${s.agent || ""}`.toLowerCase().includes(q.toLowerCase())));
+  const step = steps.find((s) => s.step === selected) || null;
+  const calls = steps.filter((s) => s.kind === "llm").length;
+  const tools = steps.filter((s) => ["tool", "retriever", "embedding", "reranker"].includes(s.kind)).length;
+  const tokens = steps.reduce((n, s) => n + (s.tokens?.total || 0), 0);
+  const errors = steps.filter((s) => s.status === "error").length;
+  if (!steps.length) return <Empty title="No steps yet">Steps appear once the run has recorded a model call, a tool call or a node.</Empty>;
+  return (
+    <div>
+      <div className="steps-summary">
+        <span><strong>{steps.length}</strong> steps</span>
+        <span><strong>{calls}</strong> model calls</span>
+        <span><strong>{tools}</strong> tool calls</span>
+        <span><strong>{steps.length - calls - tools}</strong> control / node steps</span>
+        {tokens > 0 && <span><strong>{tokens.toLocaleString()}</strong> tokens</span>}
+        {errors > 0 && <span className="err"><strong>{errors}</strong> with errors</span>}
+      </div>
+      <div className="split">
+        <div className="card">
+          <div className="row" style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+            <input placeholder="Filter by step no. / name / agent" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
+            <select value={kind} onChange={(e) => setKind(e.target.value)} style={{ width: 120 }}><option value="">all kinds</option>{kinds.map((k) => <option key={k} value={k}>{STEP_KIND_LABEL[k] || k}</option>)}</select>
+          </div>
+          <div className="span-list">
+            {shown.map((s) => (
+              <div key={s.step} className={`span-row step-row ${s.step === selected ? "selected" : ""}`} onClick={() => setSelected(s.step)}>
+                <span className="step-no">{s.step}</span>
+                <span className={`kind t-${s.kind}`}><Icon name={s.kind} size={12} /></span>
+                <span className="name"><span className="step-agent">{s.agent || "—"}</span><span className="muted"> · {STEP_KIND_LABEL[s.kind] || s.kind}</span>{s.name !== s.agent && <><br /><span className="step-sub">{s.name}</span></>}</span>
+                <span className="muted" style={{ fontSize: 11.5 }}>{duration(s.start_time, s.end_time)}</span>
+                <Status value={s.status} />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="card span-detail">
+          {!step ? <Empty title="Select a step">Pick a step on the left.</Empty> : (
+            <>
+              <div className="row"><span className="step-no big">{step.step}</span><span className={`badge t-${step.kind}`} style={{ color: "#fff", border: "none" }}>{STEP_KIND_LABEL[step.kind] || step.kind}</span><strong style={{ fontSize: 15 }}>{step.agent || step.name}</strong><Status value={step.status} /></div>
+              <dl className="kv">
+                <dt>Step</dt><dd>{step.step} of {steps.length}</dd>
+                <dt>Agent / node</dt><dd>{step.agent || "—"}</dd>
+                <dt>Name</dt><dd>{step.name}</dd>
+                {step.model && <><dt>Model</dt><dd>{step.model}</dd></>}
+                {fmtTokens(step.tokens) && <><dt>Tokens</dt><dd className="mono">{fmtTokens(step.tokens)}</dd></>}
+                <dt>Start / end</dt><dd>{fmtTime(step.start_time)} → {step.end_time ? fmtTime(step.end_time) : "…"}</dd>
+                <dt>Duration</dt><dd>{duration(step.start_time, step.end_time)}</dd>
+                <dt>Source span</dt><dd><a href="#" onClick={(e) => { e.preventDefault(); onOpenSpan(step.span_id); }} className="mono">{byId[step.span_id]?.name || step.span_id}</a></dd>
+                {step.nested_span_ids?.length > 0 && <><dt>Includes</dt><dd>{step.nested_span_ids.map((id) => <a key={id} href="#" onClick={(e) => { e.preventDefault(); onOpenSpan(id); }} style={{ marginRight: 8 }}>{byId[id]?.name || id}</a>)}</dd></>}
+                {step.duplicate_span_ids?.length > 0 && <><dt>Also recorded as</dt><dd className="muted">{step.duplicate_span_ids.map((id) => byId[id]?.name || id).join(", ")} (same call, another instrumentation)</dd></>}
+              </dl>
+              {step.error && <div className="error-box"><strong>{step.error.type}</strong>: {step.error.message}</div>}
+              {step.kind === "llm" && step.input?.messages ? (
+                <div className="json"><div className="json-head" style={{ cursor: "default" }}>Messages sent to the model</div>
+                  <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {step.input.messages.map((m, i) => (
+                      <div key={i}><Badge tone={m.role === "user" ? "accent" : m.role === "tool" ? "det" : "neutral"}>{m.role}</Badge>
+                        <pre style={{ marginTop: 4 }}>{m.content ?? pretty(m.tool_calls)}</pre></div>
+                    ))}
+                  </div>
+                </div>
+              ) : <Json label="Input" value={step.input} />}
+              <Json label="Output" value={step.output} />
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -268,9 +376,9 @@ function Checkpoints({ run }) {
         {data.items.map((c, i) => (
           <div key={c.checkpoint_id} className={`cp ${c.checkpoint_id === selected ? "selected" : ""}`} onClick={() => setSelected(c.checkpoint_id)}>
             <div className="row"><strong>#{data.items.length - 1 - i}</strong>
-              <span>{c.after_node ? <>after <b>{c.after_node}</b></> : <span className="muted">initial</span>}</span>
+              <span>{c.after_node ? <>after <b>{c.after_label || c.after_node}</b></> : <span className="muted">initial</span>}</span>
               <span className="muted">→ {c.next.length ? c.next.join(", ") : "end"}</span>
-              <span className="spacer" />{c.interrupted && <Status value="paused" />}{c.forkable && <Badge tone="accent">forkable</Badge>}
+              <span className="spacer" />{c.inherited && <Badge title="Written before this branch existed (parent run)">parent</Badge>}{c.interrupted && <Status value="paused" />}{c.forkable && <Badge tone="accent">forkable</Badge>}
             </div>
             <div className="muted mono" style={{ fontSize: 11 }}>{c.checkpoint_id}</div>
           </div>
@@ -279,15 +387,35 @@ function Checkpoints({ run }) {
       <div className="card span-detail">
         {!cp ? <Empty title="Select a checkpoint" /> : (
           <>
-            <div className="row"><strong>Checkpoint after {cp.after_node || "start"}</strong><span className="muted">step {cp.step}</span><span className="spacer" />
+            <div className="row"><strong>Checkpoint after {cp.after_label || cp.after_node || "start"}</strong><span className="muted">step {cp.step}</span><span className="spacer" />
               <button disabled={!cp.forkable} onClick={() => setMode("replay")} title="Restore this state in a new branch and continue without changes"><Icon name="replay" /> Replay from here</button>
-              <button className="primary" disabled={!cp.forkable} onClick={() => setMode("fork")}><Icon name="branch" /> Fork with edits</button>
+              <button className="primary" disabled={!cp.forkable || !cp.editable?.length} onClick={() => setMode("fork")}
+                title={cp.forkable && !cp.editable?.length ? "Nothing produced at this step can be edited" : ""}><Icon name="branch" /> Fork with edits</button>
             </div>
             {!cp.forkable && <div className="note">{cp.next.length ? "This checkpoint precedes the first node. Start a new run with different inputs instead." : "Terminal checkpoint: nothing left to execute."}</div>}
-            <div className="note">Fork and replay copy this checkpoint's state into a <b>new run</b> (new thread). The original run and its history are never modified. Model-backed steps may produce different outputs: state is restored, outputs are not guaranteed identical.</div>
-            <Json label="Executed path at this point" value={cp.state.path} />
-            <Json label="Inputs" value={cp.state.input} />
-            {Object.entries(cp.state.nodes).map(([id, n]) => <Json key={id} label={`nodes.${id}.output (${n.type})`} value={n.output} collapsed={n.type === "start"} />)}
+            {cp.forkable && (
+              <div className="note">
+                <b>Continues from:</b> {cp.next.join(", ")}.{" "}
+                {cp.editable?.length
+                  ? <>A fork here may change only what <b>{cp.after_label || cp.after_node}</b> produced: {cp.editable.map((e) => <code key={e.path} style={{ marginRight: 6 }}>{e.path}</code>)}</>
+                  : <>Nothing produced at this step can be edited (for example a condition, whose result is recomputed); replay is still possible.</>}
+                {" "}To change an earlier step, fork from the checkpoint after that step.
+              </div>
+            )}
+            {data.connected ? (
+              <>
+                <div className="note">Read live from the executor's own checkpoint store. Fork and replay ask the <b>executor</b> to create a new branch from this checkpoint (it becomes a new run here, with lineage). The source run's head and checkpoints are not modified. Model-backed steps may produce different outputs.</div>
+                {cp.editable.map((e) => <Json key={e.path} label={`${e.path} (written at this step · editable in a fork)`} value={e.value} />)}
+                <Json label="Full executor state at this checkpoint" value={cp.state} collapsed />
+              </>
+            ) : (
+              <>
+                <div className="note">Fork and replay copy this checkpoint's state into a <b>new run</b> (new thread). The original run and its history are never modified. Model-backed steps may produce different outputs: state is restored, outputs are not guaranteed identical.</div>
+                <Json label="Executed path at this point" value={cp.state.path} />
+                <Json label="Inputs" value={cp.state.input} />
+                {Object.entries(cp.state.nodes).map(([id, n]) => <Json key={id} label={`nodes.${id}.output (${n.type})`} value={n.output} collapsed={n.type === "start"} />)}
+              </>
+            )}
           </>
         )}
       </div>
@@ -297,10 +425,8 @@ function Checkpoints({ run }) {
 }
 
 function ForkDialog({ run, cp, mode, onClose }) {
-  const editable = [
-    ...Object.entries(cp.state.input).map(([k, v]) => ({ path: `input.${k}`, value: v })),
-    ...Object.entries(cp.state.nodes).filter(([, n]) => n.type !== "condition" && n.type !== "start").map(([id, n]) => ({ path: `nodes.${id}.output`, value: n.output })),
-  ];
+  // The server lists what may be edited at this checkpoint: only what the step that just ran produced.
+  const editable = (cp.editable || []).map((e) => ({ path: e.path, value: e.value, type: e.type, description: e.description, choices: e.choices }));
   const [edits, setEdits] = useState({});
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -309,8 +435,8 @@ function ForkDialog({ run, cp, mode, onClose }) {
     try {
       const changes = {};
       for (const [path, text] of Object.entries(edits)) {
-        const orig = editable.find((e) => e.path === path)?.value;
-        changes[path] = typeof orig === "string" ? text : JSON.parse(text);
+        const spec = editable.find((e) => e.path === path);
+        changes[path] = spec?.type === "string" || (spec?.type === undefined && typeof spec?.value === "string") ? text : JSON.parse(text);
       }
       const body = mode === "fork" ? { checkpoint_id: cp.checkpoint_id, changes } : { checkpoint_id: cp.checkpoint_id };
       const created = await api(`/api/runs/${run.id}/${mode}`, { method: "POST", body });
@@ -318,17 +444,29 @@ function ForkDialog({ run, cp, mode, onClose }) {
     } catch (e) { setError(e); } finally { setBusy(false); }
   };
   return (
-    <Modal title={mode === "fork" ? `Fork after “${cp.after_node}”` : `Replay after “${cp.after_node}”`} onClose={onClose}
+    <Modal title={mode === "fork" ? `Fork after “${cp.after_label || cp.after_node}”` : `Replay after “${cp.after_label || cp.after_node}”`} onClose={onClose}
       footer={<><button onClick={onClose}>Cancel</button><button className="primary" disabled={busy || (mode === "fork" && !Object.keys(edits).length)} onClick={submit}>
         <Icon name={mode === "fork" ? "branch" : "replay"} /> {busy ? "Starting…" : mode === "fork" ? "Create branch and run" : "Replay in new branch"}</button></>}>
       <ErrorBox error={error} />
       {mode === "replay" ? <div className="note">Continues from this checkpoint ({cp.next.join(", ")} next) in a new run with identical state. Deterministic nodes reproduce the same results; model-backed nodes are called again.</div> : (
         <>
-          <div className="note" style={{ marginBottom: 12 }}>Edit any allowed field; unchanged fields keep their checkpoint values. Execution continues with <b>{cp.next.join(", ")}</b>. Condition results are recomputed from the edited values.</div>
+          <div className="note" style={{ marginBottom: 12 }}>
+            You can change what <b>{cp.after_label || cp.after_node}</b> produced at this step. Everything else keeps its
+            checkpoint value, and nodes before this checkpoint are not re-run (shown as <i>inherited</i>). Execution
+            continues with <b>{cp.next.join(", ")}</b>{run.origin === "connected" ? "; the executor validates the values again. Lists are edited as JSON arrays." : "; later conditions are evaluated with the new value."}
+            {editable.some((e) => e.choices) && <> Editing a routing decision (a field with fixed choices) changes where execution continues.</>}
+          </div>
           {editable.map((e) => (
-            <Field key={e.path} label={e.path} hint={edits[e.path] !== undefined ? "edited" : ""}>
-              <textarea rows={Math.min(8, Math.max(2, pretty(e.value).split("\n").length))} defaultValue={pretty(e.value)}
-                onChange={(ev) => setEdits({ ...edits, [e.path]: ev.target.value })} />
+            <Field key={e.path} label={e.path} hint={edits[e.path] !== undefined ? "edited" : e.description || ""}>
+              {e.choices ? (
+                <select defaultValue={e.value ?? ""} onChange={(ev) => setEdits({ ...edits, [e.path]: ev.target.value })}>
+                  {!e.choices.includes(e.value) && <option value={e.value ?? ""}>{String(e.value ?? "")}</option>}
+                  {e.choices.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              ) : (
+                <textarea rows={Math.min(8, Math.max(2, pretty(e.value).split("\n").length))} defaultValue={pretty(e.value)}
+                  onChange={(ev) => setEdits({ ...edits, [e.path]: ev.target.value })} />
+              )}
             </Field>
           ))}
         </>

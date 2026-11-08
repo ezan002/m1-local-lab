@@ -5,9 +5,39 @@
 A local-first studio to **build, run, observe and debug multi-agent workflows**, plus read-only observation of
 agents built elsewhere (OpenTelemetry).
 
+[![Agent Studio demo](docs/demo/agent-studio-preview.gif)](docs/demo/agent-studio-demo.mp4)
+
+▶ **[Detailed walkthrough video (19:36, 1080p, 11 chapters)](docs/demo/agent-studio-demo.mp4)**: explains every page,
+button and option, with Chinese captions and the explained control highlighted on screen. It is recorded live from the
+running product by `scripts/demo/build_demo.py` (Playwright + FFmpeg; offline, deterministic provider, every step
+asserted). The chapter list and feature coverage are in [docs/demo/README.md](docs/demo/README.md) and
+[docs/demo/COVERAGE.md](docs/demo/COVERAGE.md).
+
+### Quick start: see the demo runs in 3 steps (any OS, no model key, no Node.js)
+
+```bash
+python3.11 -m venv .venv                 # Windows: py -3.11 -m venv .venv
+. .venv/bin/activate                     # Windows: .venv\Scripts\activate
+pip install -e .
+python -m m1_local.cli studio --demo     # open http://127.0.0.1:8100
+```
+
+`--demo` opens a copy of the bundled runs in `demo-data/` (the repository files are never changed; the copy lives in
+`data/studio-demo/`): Studio workflow runs with checkpoints and forks, runs of the M1 agent (real model, qwen3:8b)
+and of the third-party local-deep-researcher, example external traces, and an imported Codex session. Open any run →
+**Graph**, **Timeline**, **Spans**, **Steps** (every model call, tool call and control step numbered 1..N),
+**Checkpoints & fork**, **Compare**. Forking a connected-agent run needs that agent running; the M1 card can start
+an offline copy from the Studio. Rebuild the demo set from your own data: `python scripts/build_demo_data.py`.
+
+快速体验（中文）：按上面四条命令安装并以 `--demo` 启动，浏览器打开 http://127.0.0.1:8100 即可看到预置的运行记录；
+任一运行的 **Steps** 标签页按 1..N 编号列出每一次模型调用、工具调用和控制步骤。
+
+Full Windows install (Playwright, Phoenix and the legacy tools as well):
+
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1   # once (Python 3.11 venv)
 .\scripts\start-studio.ps1                                                      # http://127.0.0.1:8100
+.\scripts\start-studio.ps1 -Demo                                                # same, on the bundled demo runs
 ```
 
 - No Node.js needed to run (the built UI is committed in `web/studio/`). Rebuild UI: `cd frontend; npm install; npm run build`.
@@ -16,6 +46,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1   
   labeled everywhere; not model evidence).
 - Data: `data/studio/` (SQLite workflows/runs/spans + LangGraph checkpoints). Survives restarts.
 - External agents: export OTLP/HTTP to `http://127.0.0.1:8100/v1/traces`; example in `examples/external_agent/`.
+- **Connected agents** (LangGraph executors running in their own process): sidebar → *Connected agents* →
+  *Connect executor*. The Studio can start the original M1 executor for you (offline deterministic or real model) or
+  attach to one you run (`m1-local serve`). Runs, checkpoints, pause/resume/retry, fork and replay go through the
+  executor's own control API; details in [docs/connected-executors.md](docs/connected-executors.md).
+- **Any LangGraph agent**: wrap your compiled graph with the `studio_executor` SDK (a few lines, your own process and
+  checkpointer) and attach it under *Connected agents*. Guide: [docs/studio-executor-sdk.md](docs/studio-executor-sdk.md);
+  example: `examples/langgraph_agent/support_agent.py`.
 
 Demo, architecture, feature matrix and limitations: [docs/V1_DELIVERY_REPORT.md](docs/V1_DELIVERY_REPORT.md).
 Test evidence: [docs/V1_VALIDATION_REPORT.md](docs/V1_VALIDATION_REPORT.md).

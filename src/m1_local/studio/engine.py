@@ -478,6 +478,7 @@ class StudioEngine:
                 "after_node": values.get("last_node"), "next": list(snap.next),
                 "interrupted": any(getattr(t, "interrupts", ()) for t in snap.tasks),
                 "forkable": bool(snap.next) and bool(values.get("last_node")),
+                "editable": self._editable(values) if snap.next else [],
                 "state": {"input": values.get("input", {}), "nodes": {k: {"output": v.get("output"), "type": v.get("type")}
                                                                       for k, v in values.get("nodes", {}).items()},
                           "path": values.get("path", []), "visits": values.get("visits", {})},
@@ -516,7 +517,33 @@ class StudioEngine:
         return self.store.get_run(new_run["id"])  # type: ignore[return-value]
 
     @staticmethod
-    def _apply_changes(values: dict[str, Any], changes: dict[str, Any], defn: WorkflowDefinition) -> dict[str, Any]:
+    def _editable(values: dict[str, Any]) -> list[dict[str, Any]]:
+        """Fields a fork may edit at this checkpoint: only what the node that just ran produced.
+
+        A checkpoint "after X" restores the state right after X and continues with the next node, so the meaningful
+        edit is X's own result. Earlier nodes are changed by forking from their own checkpoints (where execution then
+        continues from the node after them). After the Start node, the result is the run input; a condition's result
+        is computed from other values and has nothing of its own to edit."""
+        last = values.get("last_node")
+        node = values.get("nodes", {}).get(last) if last else None
+        if node is None:
+            return []
+        if node.get("type") == "start":
+            return [{"path": f"input.{k}", "value": v, "node": last} for k, v in values.get("input", {}).items()]
+        if node.get("type") == "condition":
+            return []
+        return [{"path": f"nodes.{last}.output", "value": node.get("output"), "node": last}]
+
+    @classmethod
+    def _apply_changes(cls, values: dict[str, Any], changes: dict[str, Any], defn: WorkflowDefinition) -> dict[str, Any]:
+        allowed = {e["path"] for e in cls._editable(values)}
+        last = values.get("last_node")
+        for path in changes:
+            if path not in allowed and (path.startswith("input.") or path.startswith("nodes.")):
+                raise ValueError(
+                    f"field {path!r} cannot be edited at the checkpoint after {last!r}: a fork may only change what {last!r} "
+                    f"produced ({', '.join(sorted(allowed)) or 'nothing editable here'}). To change an earlier node, fork from "
+                    "the checkpoint after that node.")
         applied: dict[str, Any] = {}
         for path, new_value in changes.items():
             parts = path.split(".")

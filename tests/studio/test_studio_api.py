@@ -159,3 +159,47 @@ def test_otlp_failures_and_malformed_payloads(client):
                                                              "name": "root", "startTimeUnixNano": "1700000000000000000", "endTimeUnixNano": "1700000001000000000"}]}]}]}
     r = client.post("/v1/traces", json=ok_json)
     assert r.status_code == 200 and r.json()["runs"] == ["ext_0af7651916cd43dd8448eb211c80319c"]
+
+
+def _otlp_json(trace_id: str, span_id: str, name: str, service: str = "file-agent") -> dict:
+    return {"resourceSpans": [{"resource": {"attributes": [{"key": "service.name", "value": {"stringValue": service}}]},
+                               "scopeSpans": [{"spans": [{"traceId": trace_id, "spanId": span_id, "name": name,
+                                                          "startTimeUnixNano": "1700000000000000000",
+                                                          "endTimeUnixNano": "1700000001000000000"}]}]}]}
+
+
+def test_trace_file_import_json_jsonl_and_errors(client):
+    t1, t2 = "1" * 32, "2" * 32
+    # one OTLP JSON request object
+    r = client.post("/api/traces/import", json={"filename": "one.json", "content": json.dumps(_otlp_json(t1, "a" * 16, "root"))})
+    assert r.status_code == 200 and r.json()["accepted"] == 1 and r.json()["runs"] == [f"ext_{t1}"]
+    assert client.get(f"/api/runs/ext_{t1}").json()["origin"] == "external"
+    # JSON Lines with two payloads (a second trace and a duplicate of the first), with a UTF-8 BOM
+    lines = "﻿" + json.dumps(_otlp_json(t2, "b" * 16, "root")) + "\n\n" + json.dumps(_otlp_json(t1, "a" * 16, "root")) + "\n"
+    r = client.post("/api/traces/import", json={"filename": "many.jsonl", "content": lines}).json()
+    assert r["accepted"] == 1 and r["duplicates"] == 1 and r["payloads"] == 2 and r["runs"] == [f"ext_{t1}", f"ext_{t2}"]
+    # a JSON array of payloads
+    arr = [_otlp_json("3" * 32, "c" * 16, "root"), _otlp_json("3" * 32, "d" * 16, "child")]
+    assert client.post("/api/traces/import", json={"content": json.dumps(arr)}).json()["accepted"] == 2
+    # errors are reported, nothing is half-imported from a non-OTLP file
+    for content, fragment in [("", "empty"), ("{not json\nmore", "line 1"), (json.dumps({"events": []}), "resourceSpans"),
+                              (json.dumps({"resourceSpans": [{"scopeSpans": [{"spans": [{"name": "no ids"}]}]}]}), "no valid spans")]:
+        r = client.post("/api/traces/import", json={"content": content})
+        assert r.status_code == 400 and fragment in r.json()["detail"], (content, r.json())
+    # the import endpoint is a state-changing call: CSRF applies
+    assert client.post("/api/traces/import", json={"content": "{}"}, headers={"x-studio-csrf": "wrong"}).status_code == 403
+
+
+def test_external_spans_listed_parent_first_even_when_children_arrive_first(client):
+    """OTLP exporters send a span when it ends, so leaves arrive before their parents."""
+    def span(sid, parent, name, start):
+        out = {"traceId": "4" * 32, "spanId": sid, "name": name, "startTimeUnixNano": str(start), "endTimeUnixNano": str(start + 10)}
+        return {**out, "parentSpanId": parent} if parent else out
+    arrival = [span("c" * 16, "b" * 16, "analyst.llm", 1700000000000000200), span("d" * 16, "b" * 16, "word_count", 1700000000000000300),
+               span("b" * 16, "a" * 16, "analyst", 1700000000000000100), span("e" * 16, "a" * 16, "critic", 1700000000000000400),
+               span("a" * 16, None, "research_session", 1700000000000000000)]
+    for item in arrival:   # one export per ended span, children first
+        payload = {"resourceSpans": [{"resource": {"attributes": []}, "scopeSpans": [{"spans": [item]}]}]}
+        assert client.post("/v1/traces", json=payload).status_code == 200
+    names = [s["name"] for s in client.get(f"/api/runs/ext_{'4' * 32}/spans").json()]
+    assert names == ["research_session", "analyst", "analyst.llm", "word_count", "critic"]

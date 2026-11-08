@@ -62,8 +62,36 @@ index.html, stale CSRF after server restart, visit counting, inherited nodes in 
   `scripts/restart_studio_dev.ps1 -Port 8100 -DataDir data/studio` (stop: same script stops only an m1_local studio process,
   or Ctrl+C when started with `start-studio.ps1`).
 
+### Milestone 5 — connected executors, route 3 (2026-10-15; cloud build, re-verified on Windows)
+- Studio drives LangGraph executors that run in their own process. First connector: the original M1 executor.
+  Files: `studio/connectors/{base,m1_legacy,m1_legacy_host}.py`, `studio/connected.py`; `otlp.py` correlation;
+  store: `connectors` table + `runs.remote_run_id`; API `/api/connectors*`; run endpoints dispatch on `origin=connected`;
+  legacy `api.py` gained read-only `GET /api/graph`. UI: `pages/ConnectedPage.jsx`, run page/fork dialog schema-driven.
+- Decision: separate process + control API (not in-process import): no dependency coupling, legacy DB keeps its
+  owner lock, original runtime environment (fidelity). Spans are rebuilt from the executor's checkpoint history.
+- Verified in Linux cloud env (user's site-packages + pure-Python shims for compiled wheels): pytest 203 passed /
+  10 skipped; `tests/studio/test_connected_*` (in-process + 3-process e2e); `scripts/verify_connected_ui.py` 10/10,
+  0 browser errors; V1 UI script 10/10. web/studio built with esbuild in the cloud → rebuild with `npm run build`.
+- Windows re-check (user machine, 23:05): `pytest -q tests/studio` 40 passed; `scripts/verify_connected_ui.py` 10/10 PASS, 0 browser errors.
+- Details/limits: `docs/connected-executors.md`.
+
+### Milestone 6 — studio-executor SDK for any LangGraph agent (2026-10-15, cloud; NOT yet re-run on Windows)
+- `src/studio_executor/` (independent of m1_local): `StudioExecutor(graph, ...)` + dependency-free ASGI app +
+  `serve`/`serve_async`. Run registry (SQLite optional), head tracking via `stream_mode="checkpoints"`, pause by
+  stopping after a checkpoint event (next step not started), resume incl. `interrupt()` and failed runs, fork via
+  `aupdate_state` (paused branch, same thread), replay. Fork fields restricted to LastValue channels. Token + no-Origin
+  + loopback Host.
+- Studio: connector kind `studio_executor` (`connectors/generic.py`, attach + token, token masked), dialog option.
+- Independent example: `examples/langgraph_agent/support_agent.py` (AsyncSqliteSaver, deterministic/openai).
+- Verified (cloud): pytest 211 passed / 10 skipped; `scripts/verify_sdk_ui.py` 6/6; connected + V1 UI scripts PASS.
+- Guide: `docs/studio-executor-sdk.md`.
+
 ## Next actions (post-V1 backlog, in priority order)
 
+0. `npm run build` (replace the cloud esbuild bundle); full `pytest -q`; try a real-model executor
+   (`Real model` in the connect dialog); commit.
+0b. Windows: `pytest -q`, `scripts/verify_sdk_ui.py`; run the example agent with `--mode openai`.
+0c. Try the SDK on a real third-party LangGraph agent; consider packaging `studio_executor` separately (own pyproject).
 1. Span-level replay (re-issue one LLM call with an edited prompt; show diff) — research requirement not yet met.
 2. Parallel fan-out/join node semantics in the compiler (LangGraph supports it; schema currently forbids).
 3. Optional export of Studio spans to Phoenix/OTLP; show legacy attribution results for external traces.
