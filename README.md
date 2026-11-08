@@ -32,6 +32,8 @@ an offline copy from the Studio. Rebuild the demo set from your own data: `pytho
 快速体验（中文）：按上面四条命令安装并以 `--demo` 启动，浏览器打开 http://127.0.0.1:8100 即可看到预置的运行记录；
 任一运行的 **Steps** 标签页按 1..N 编号列出每一次模型调用、工具调用和控制步骤。
 
+**使用说明（部署、接入智能体、各功能怎么用）：[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**
+
 Full Windows install (Playwright, Phoenix and the legacy tools as well):
 
 ```powershell
