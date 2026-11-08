@@ -28,7 +28,7 @@ Windows 也可以用 `.\scripts\start-studio.ps1 -Demo`。用自己的数据：�
 | 功能 | 说明 |
 |---|---|
 | **Connected agents** | 接入在自己进程里运行的 LangGraph 智能体（M1、第三方智能体、用 SDK 包装的任意智能体），在 Studio 里发起运行、暂停、继续 |
-| **运行详情** | Graph（结构与走过的路径）、Timeline（耗时）、Spans（调用树）、**Steps**（每次模型调用、工具调用、控制步骤按 1..N 编号） |
+| **运行详情** | Graph（结构与走过的路径）、Timeline（耗时）、Spans（调用树）、**Steps**（把运行拆成智能体实际做的动作，按 1..N 编号：每次模型调用、工具调用、路由判断、无调用的控制节点各一步；比节点更细，一个节点里有几次调用就拆成几步；附 span → step 对照表） |
 | **Replay / Fork** | 从任一检查点原样重放，或修改这一步的输出后分支运行；检查点之前的步骤直接继承 |
 | **Compare** | 分支与原运行逐节点对比：inherited / same / differs |
 | **External traces** | 上传 OTLP JSON 或 Codex 会话文件，或实时接收 `/v1/traces`；只读查看 |
