@@ -113,3 +113,30 @@ def test_steps_endpoint_for_a_studio_workflow_run(client):
     assert kinds[0] == "start" and kinds[-1] == "output"
     assert {"llm", "tool", "condition"} <= set(kinds) and "agent" not in kinds  # agent nodes are covered by their calls
     assert all(s["agent"] for s in steps)
+
+
+def test_routing_decision_is_a_step_and_every_span_is_explained():
+    from m1_local.studio.steps import span_roles
+    spans = [
+        span("cr", None, "workflow", "M1 run", 0, 60),
+        span("cn_o", "cr", "agent", "Orchestrator", 0, 30, "orchestrator"),
+        span("cn_f", "cr", "agent", "Finalizer", 31, 50, "finalizer"),
+        span("run", "cr", "agent", "m1.run", 0, 60),
+        span("lg", "run", "chain", "LangGraph", 0, 59),
+        span("o", "lg", "chain", "orchestrator", 0, 30),
+        span("seq", "o", "chain", "RunnableSequence", 0.1, 29),
+        span("chat", "seq", "llm", "ChatOpenAI", 0.2, 28.9, attributes={"langgraph_node": "orchestrator"}),
+        span("parse", "seq", "chain", "RunnableLambda", 28.9, 29),
+        span("route", "o", "chain", "after_orchestrator", 29.5, 29.6, output="__REDACTED__"),
+        span("f", "lg", "chain", "finalizer", 31, 50),
+        span("chat2", "f", "llm", "ChatOpenAI", 31.1, 49.9, attributes={"langgraph_node": "finalizer"}),
+        span("commit", "run", "chain", "m1.checkpoint.commit", 30, 30.01, attributes={"langgraph_node": "orchestrator"}),
+    ]
+    steps = build_steps(spans)
+    assert [(s["kind"], s["agent"]) for s in steps] == [("llm", "Orchestrator"), ("route", "Orchestrator"), ("llm", "Finalizer")]
+    assert steps[1]["output"]["next"] == "Finalizer"
+    roles = {r["span_id"]: (r["role"], r["steps"]) for r in span_roles(spans, steps)}
+    assert len(roles) == len(spans)
+    assert roles["chat"] == ("step", [1]) and roles["route"] == ("step", [2])
+    assert roles["o"] == ("container", [1, 2]) and roles["cn_o"] == ("container", [1]) and roles["cr"][0] == "root"
+    assert roles["parse"][0] == "plumbing" and roles["commit"][0] == "plumbing"

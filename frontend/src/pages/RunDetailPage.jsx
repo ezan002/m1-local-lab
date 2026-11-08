@@ -124,7 +124,7 @@ export default function RunDetailPage({ runId }) {
       {tab === "graph" && <ReactFlowProvider><RunGraph run={run} spans={spans} onSelect={(id) => { setSelectedSpan(id); setTab("spans"); }} /></ReactFlowProvider>}
       {tab === "timeline" && <Timeline spans={spans} onSelect={(id) => { setSelectedSpan(id); setTab("spans"); }} />}
       {tab === "spans" && <SpanExplorer spans={spans} selected={selectedSpan} onSelect={setSelectedSpan} />}
-      {tab === "steps" && <StepsView steps={steps} spans={spans} onOpenSpan={(id) => { setSelectedSpan(id); setTab("spans"); }} />}
+      {tab === "steps" && <StepsView runId={runId} steps={steps} spans={spans} onOpenSpan={(id) => { setSelectedSpan(id); setTab("spans"); }} />}
       {tab === "checkpoints" && !external && <Checkpoints run={run} />}
       {tab === "compare" && <Compare run={run} />}
       {tab === "io" && <div className="card card-pad"><Json label="Input" value={run.input} /><Json label="Output" value={run.output} /><Json label="Error" value={run.error} collapsed /></div>}
@@ -201,7 +201,7 @@ function Timeline({ spans, onSelect }) {
   );
 }
 
-const STEP_KIND_LABEL = { llm: "model call", tool: "tool call", retriever: "retrieval", embedding: "embedding", reranker: "rerank",
+const STEP_KIND_LABEL = { route: "routing decision", llm: "model call", tool: "tool call", retriever: "retrieval", embedding: "embedding", reranker: "rerank",
   start: "start", output: "output", condition: "condition", agent: "agent node", node: "node", external: "span" };
 
 function fmtTokens(t) {
@@ -209,7 +209,52 @@ function fmtTokens(t) {
   return t.prompt !== undefined ? `${t.total} (in ${t.prompt} · out ${t.completion ?? "?"})` : `${t.total}`;
 }
 
-function StepsView({ steps, spans, onOpenSpan }) {
+const ROLE_LABEL = {
+  step: (n) => `is step ${n[0]}`,
+  duplicate: (n) => `same call as step ${n[0]}`,
+  part: (n) => `part of step ${n[0]}`,
+  container: (n) => n.length ? `contains step${n.length > 1 ? "s" : ""} ${fmtRange(n)}` : "container",
+  root: (n) => n.length ? `whole run (steps ${fmtRange(n)})` : "whole run",
+  plumbing: () => "not a step",
+};
+const ROLE_TONE = { step: "real", duplicate: "det", part: "neutral", container: "neutral", root: "neutral", plumbing: "neutral" };
+
+function fmtRange(nums) {
+  if (!nums.length) return "";
+  const out = []; let a = nums[0], b = nums[0];
+  for (const n of nums.slice(1)) { if (n === b + 1) b = n; else { out.push(a === b ? `${a}` : `${a}–${b}`); a = b = n; } }
+  out.push(a === b ? `${a}` : `${a}–${b}`);
+  return out.join(", ");
+}
+
+function SpanStepMap({ runId, onOpenSpan }) {
+  const [data, setData] = useState(null);
+  useEffect(() => { api(`/api/runs/${runId}/step-map`).then(setData).catch(() => setData(null)); }, [runId]);
+  if (!data) return null;
+  const count = (role) => data.roles.filter((r) => r.role === role).length;
+  return (
+    <details className="card step-map">
+      <summary><strong>How {data.spans} spans became {data.steps} steps</strong>
+        <span className="muted"> · {count("step")} are steps · {count("duplicate")} duplicate records · {count("part")} part of a step · {count("container") + count("root")} containers · {count("plumbing")} not steps</span></summary>
+      <p className="muted" style={{ margin: "8px 0 10px" }}>A span is any timed record an instrumentation chose to write, so its count depends on how the agent was instrumented: one model call can be recorded by two instrumentations, and nodes, sequences and the run itself are containers around the calls. A step is one action the agent took: a model call, a tool call, a routing decision or a node without calls.</p>
+      <table className="step-map-table">
+        <thead><tr><th>Span</th><th>Kind</th><th>Relation to steps</th><th>Why</th></tr></thead>
+        <tbody>
+          {data.roles.map((r) => (
+            <tr key={r.span_id}>
+              <td><a href="#" onClick={(e) => { e.preventDefault(); onOpenSpan(r.span_id); }} className="mono">{r.name}</a></td>
+              <td><span className={`kind t-${r.kind}`} style={{ display: "inline-flex" }}><Icon name={r.kind} size={11} /></span> <span className="muted">{r.kind}</span></td>
+              <td><Badge tone={ROLE_TONE[r.role]}>{(ROLE_LABEL[r.role] || (() => r.role))(r.steps)}</Badge></td>
+              <td className="muted">{r.reason}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  );
+}
+
+function StepsView({ runId, steps, spans, onOpenSpan }) {
   const [selected, setSelected] = useState(steps[0]?.step || null);
   const [kind, setKind] = useState("");
   const [q, setQ] = useState("");
@@ -229,9 +274,11 @@ function StepsView({ steps, spans, onOpenSpan }) {
         <span><strong>{calls}</strong> model calls</span>
         <span><strong>{tools}</strong> tool calls</span>
         <span><strong>{steps.length - calls - tools}</strong> control / node steps</span>
+        <span className="muted">from <strong>{spans.length}</strong> spans</span>
         {tokens > 0 && <span><strong>{tokens.toLocaleString()}</strong> tokens</span>}
         {errors > 0 && <span className="err"><strong>{errors}</strong> with errors</span>}
       </div>
+      <SpanStepMap runId={runId} onOpenSpan={onOpenSpan} />
       <div className="split">
         <div className="card">
           <div className="row" style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
@@ -242,7 +289,7 @@ function StepsView({ steps, spans, onOpenSpan }) {
             {shown.map((s) => (
               <div key={s.step} className={`span-row step-row ${s.step === selected ? "selected" : ""}`} onClick={() => setSelected(s.step)}>
                 <span className="step-no">{s.step}</span>
-                <span className={`kind t-${s.kind}`}><Icon name={s.kind} size={12} /></span>
+                <span className={`kind t-${s.kind}`}><Icon name={s.kind === "route" ? "condition" : s.kind} size={12} /></span>
                 <span className="name"><span className="step-agent">{s.agent || "—"}</span><span className="muted"> · {STEP_KIND_LABEL[s.kind] || s.kind}</span>{s.name !== s.agent && <><br /><span className="step-sub">{s.name}</span></>}</span>
                 <span className="muted" style={{ fontSize: 11.5 }}>{duration(s.start_time, s.end_time)}</span>
                 <Status value={s.status} />

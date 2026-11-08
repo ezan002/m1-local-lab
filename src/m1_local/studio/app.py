@@ -21,7 +21,7 @@ from .otlp import OTLPError, decode_request, ingest, ingest_file
 from .runtime_support import TOOLS
 from .schema import WorkflowDefinition
 from .seeds import seed
-from .steps import build_steps
+from .steps import build_steps, span_roles
 from .store import StudioStore
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -276,6 +276,14 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
         """The run as numbered atomic actions (model calls, tool calls, control nodes); see studio/steps.py."""
         _run(run_id)
         return build_steps(tree_order(store.spans(run_id)))
+
+    @app.get("/api/runs/{run_id}/step-map")
+    async def step_map(run_id: str) -> dict[str, Any]:
+        """Every span of the run and its relation to the steps (step, duplicate, part, container, plumbing)."""
+        _run(run_id)
+        spans = tree_order(store.spans(run_id))
+        steps = build_steps(spans)
+        return {"spans": len(spans), "steps": len(steps), "roles": span_roles(spans, steps)}
 
     @app.get("/api/runs/{run_id}/checkpoints")
     async def checkpoints(run_id: str) -> dict[str, Any]:
