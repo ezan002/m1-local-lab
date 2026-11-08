@@ -108,7 +108,7 @@ Workflows、Runs、Integrations 三个页面暂时隐藏（代码保留）。在
 | local-deep-researcher（第三方） | 用它自己的虚拟环境运行 `examples/third_party/local_deep_researcher_studio.py --repo <它的目录> --port 8030` | Any LangGraph agent，`http://127.0.0.1:8030` + token |
 
 **接入你自己的 LangGraph 智能体**：图编译时带上 checkpointer，再用 `studio_executor` SDK 包一层，声明输入字段和
-fork 时允许修改的字段。对方代码不用改。详见 [studio-executor-sdk.md](studio-executor-sdk.md)，例子见
+fork 时允许修改的字段。对方代码不用改。详见 [studio-executor-sdk.md](docs/studio-executor-sdk.md)，例子见
 `examples/langgraph_agent/support_agent.py`。
 
 **卡片显示 offline**：智能体没在运行，或重启时换了 token。用原来的 `STUDIO_EXECUTOR_TOKEN` 重启，或删掉卡片重新添加。
@@ -188,5 +188,5 @@ after Planner 可以改 `plan`。
 | 新增的 fork 字段没出现 | 重启智能体后，Studio 也要重启一次（或刷新运行页） |
 | 本地模型很慢 | qwen3:8b 跑一次 M1 约 6 分钟；把超时调大（1.3 的两个环境变量） |
 
-更多技术说明：[connected-executors.md](connected-executors.md)（接入原理与 fork 规则）、
-[studio-executor-sdk.md](studio-executor-sdk.md)（SDK）、[advisor-qa-2026-11.md](advisor-qa-2026-11.md)（问答）。
+更多技术说明：[connected-executors.md](docs/connected-executors.md)（接入原理与 fork 规则）、
+[studio-executor-sdk.md](docs/studio-executor-sdk.md)（SDK）、[advisor-qa-2026-11.md](docs/advisor-qa-2026-11.md)（问答）。
