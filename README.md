@@ -5,7 +5,7 @@
 
 > **📘 使用说明（部署、接入智能体、各功能怎么用）：[USER_GUIDE.md](USER_GUIDE.md)**
 
-[![Agent Studio demo](docs/demo/agent-studio-preview.gif)](docs/demo/agent-studio-demo.mp4)
+![运行详情页的 Steps 视图：一次 Codex 会话被拆成 7 个编号步骤](docs/images/steps-view.png)
 
 ## 快速开始（任意系统，不需要模型 key，不需要 Node.js）
 
@@ -43,7 +43,6 @@ Windows 也可以用 `.\scripts\start-studio.ps1 -Demo`。用自己的数据：�
 | [docs/connected-executors.md](docs/connected-executors.md) | 接入原理、检查点与 fork 规则 |
 | [docs/studio-executor-sdk.md](docs/studio-executor-sdk.md) | 用 SDK 接入自己的 LangGraph 智能体 |
 | [docs/advisor-qa-2026-11.md](docs/advisor-qa-2026-11.md) | 设计问题的答复与依据 |
-| [docs/demo/README.md](docs/demo/README.md) | 演示视频的章节与功能覆盖 |
 | [docs/LEGACY_TOOLS.md](docs/LEGACY_TOOLS.md) | 之前的研究工具：本地历史轨迹观测、Who&When 归因基准、错误归因 MVP |
 
 ## 项目结构

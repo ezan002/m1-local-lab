@@ -68,7 +68,7 @@ Studio 工作流用同样的规则：after X 只能改 `nodes.X.output`；after 
 - 执行器一次只运行一个任务（`MAX_ACTIVE_RUNS=1`）；冲突时返回 409，fork 会保留为 paused，空闲后再 Resume。
 - 暂停只在执行器的 `pause_gate`（下一个 worker 之前）生效；执行器没有 cancel 接口。
 - 节点耗时是检查点提交时间差，不是节点内部计时；更细的模型耗时/Token 看挂上来的 OTLP span（旧系统默认隐藏提示词与回复内容）。
-- 可编辑字段由执行器决定，旧系统只有 `plan` 和 `worker_instruction`。
+- 可编辑字段由执行器决定：M1 是 `plan`、`worker_instruction` 和 `next_agent`（下一步交给哪个工作者）。
 - 执行器离线时，Studio 只显示上次同步的状态；控制操作返回 502。
 - 只支持 loopback 地址，无认证（与 Studio 其它部分一致）。
 - 旧执行系统验证的是"Studio 之外的执行器"，对象仍是自有系统。任意第三方 LangGraph 智能体通过 **studio-executor SDK** 接入，见 [studio-executor-sdk.md](studio-executor-sdk.md)。
