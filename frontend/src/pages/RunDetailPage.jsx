@@ -16,6 +16,7 @@ export default function RunDetailPage({ runId }) {
   const [run, setRun] = useState(null);
   const [spans, setSpans] = useState([]);
   const [steps, setSteps] = useState([]);
+  const [focusStep, setFocusStep] = useState(null);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState(spanQuery() ? "spans" : "graph");
   const [selectedSpan, setSelectedSpan] = useState(spanQuery());
@@ -56,6 +57,18 @@ export default function RunDetailPage({ runId }) {
   const external = run.origin === "external";
   const connected = run.origin === "connected";
   const errorSpans = spans.filter((s) => s.status === "error");
+
+  const spansVisible = showHiddenTabs() || tab === "spans";
+  // Graph nodes, timeline bars and error buttons point at a span; with the Spans tab hidden they open the step it
+  // belongs to (the span itself, or the first step recorded inside it).
+  const openSpan = (id) => {
+    if (spansVisible) { setSelectedSpan(id); setTab("spans"); return; }
+    const parentOf = Object.fromEntries(spans.map((x) => [x.id, x.parent_span_id]));
+    const within = (sid) => { let cur = sid, n = 0; while (cur && n < 50) { if (cur === id) return true; cur = parentOf[cur]; n += 1; } return false; };
+    const hit = steps.find((st) => st.span_id === id || st.nested_span_ids?.includes(id) || st.duplicate_span_ids?.includes(id))
+      || steps.find((st) => within(st.span_id));
+    if (hit) { setFocusStep({ step: hit.step, at: Date.now() }); setTab("steps"); }
+  };
 
   return (
     <div className="page">
@@ -101,14 +114,14 @@ export default function RunDetailPage({ runId }) {
         <div className="note">
           The run completed, but {run.error.error_span_count || errorSpans.length || 1} step(s) reported an error. First:{" "}
           <strong>{run.error.node_id || run.error.type}</strong> — {run.error.message}
-          {errorSpans.length > 0 && <> <button className="small" style={{ marginLeft: 8 }} onClick={() => { setTab("spans"); setSelectedSpan(errorSpans[0].id); }}>Inspect error span</button></>}
+          {errorSpans.length > 0 && <> <button className="small" style={{ marginLeft: 8 }} onClick={() => openSpan(errorSpans[0].id)}>Inspect error {spansVisible ? "span" : "step"}</button></>}
         </div>
       )}
       {run.error && run.status === "failed" && (
         <div className="error-box">
           <strong>{run.error.type}</strong>{run.error.node_id ? ` in ${run.error.node_id}` : ""}: {run.error.message}
           {run.error.retry && <div style={{ marginTop: 4, opacity: .85 }}>{run.error.retry}</div>}
-          {errorSpans.length > 0 && <div style={{ marginTop: 6 }}><button className="small" onClick={() => { setTab("spans"); setSelectedSpan(errorSpans[errorSpans.length - 1].id); }}>Inspect failing span</button></div>}
+          {errorSpans.length > 0 && <div style={{ marginTop: 6 }}><button className="small" onClick={() => openSpan(errorSpans[errorSpans.length - 1].id)}>Inspect failing {spansVisible ? "span" : "step"}</button></div>}
         </div>
       )}
       <div className="row" style={{ marginBottom: 10, fontSize: 12 }}>
@@ -116,15 +129,16 @@ export default function RunDetailPage({ runId }) {
         {Object.entries(CAP_LABEL).map(([k, label]) => <Badge key={k} tone={caps[k] ? "real" : "ro"}>{caps[k] ? "✓" : "✕"} {label}</Badge>)}
       </div>
       <Tabs value={tab} onChange={setTab} tabs={[
-        { key: "graph", label: "Graph" }, { key: "timeline", label: "Timeline" }, { key: "spans", label: `Spans (${spans.length})` },
-        { key: "steps", label: `Steps (${steps.length})`, title: "Every model call, tool call and control step, numbered in order" },
+        { key: "graph", label: "Graph" }, { key: "timeline", label: "Timeline" },
+        ...(spansVisible ? [{ key: "spans", label: `Spans (${spans.length})` }] : []),
+        { key: "steps", label: `Steps (${steps.length})`, title: "One step per message: an agent message, or a tool / environment result" },
         { key: "checkpoints", label: "Checkpoints & fork", disabled: external, title: external ? "External runs expose no checkpoints" : "" },
         { key: "compare", label: "Compare" }, { key: "io", label: "Run input/output" },
       ]} />
-      {tab === "graph" && <ReactFlowProvider><RunGraph run={run} spans={spans} onSelect={(id) => { setSelectedSpan(id); setTab("spans"); }} /></ReactFlowProvider>}
-      {tab === "timeline" && <Timeline spans={spans} onSelect={(id) => { setSelectedSpan(id); setTab("spans"); }} />}
+      {tab === "graph" && <ReactFlowProvider><RunGraph run={run} spans={spans} onSelect={openSpan} /></ReactFlowProvider>}
+      {tab === "timeline" && <Timeline spans={spans} onSelect={openSpan} />}
       {tab === "spans" && <SpanExplorer spans={spans} selected={selectedSpan} onSelect={setSelectedSpan} />}
-      {tab === "steps" && <StepsView runId={runId} steps={steps} spans={spans} onChanged={load} onOpenSpan={(id) => { setSelectedSpan(id); setTab("spans"); }} />}
+      {tab === "steps" && <StepsView runId={runId} steps={steps} spans={spans} onChanged={load} focus={focusStep} showSpans={spansVisible} onOpenSpan={openSpan} />}
       {tab === "checkpoints" && !external && <Checkpoints run={run} />}
       {tab === "compare" && <Compare run={run} />}
       {tab === "io" && <div className="card card-pad"><Json label="Input" value={run.input} /><Json label="Output" value={run.output} /><Json label="Error" value={run.error} collapsed /></div>}
@@ -201,6 +215,12 @@ function Timeline({ spans, onSelect }) {
   );
 }
 
+// The Spans tab is hidden for now (the step view is the agreed granularity); it comes back with
+// localStorage "studio.showHidden" = "1", like the hidden sidebar pages.
+function showHiddenTabs() {
+  try { return window.localStorage.getItem("studio.showHidden") === "1"; } catch { return false; }
+}
+
 const STEP_KIND_LABEL = { route: "routing decision", llm: "agent message (model call)", tool: "tool result", retriever: "retrieval", embedding: "embedding", reranker: "rerank",
   start: "start", output: "output", condition: "condition", agent: "agent node", node: "node", external: "span" };
 
@@ -269,8 +289,10 @@ function StepFlags({ step }) {
   );
 }
 
-function StepsView({ runId, steps, spans, onOpenSpan, onChanged }) {
-  const [selected, setSelected] = useState(steps[0]?.step ?? null);
+function StepsView({ runId, steps, spans, onOpenSpan, onChanged, focus, showSpans = true }) {
+  const [selected, setSelected] = useState(focus?.step ?? steps[0]?.step ?? null);
+  useEffect(() => { if (focus) setSelected(focus.step); }, [focus]);
+  useEffect(() => { document.querySelector(".step-row.selected")?.scrollIntoView({ block: "nearest" }); }, [selected]);
   const [kind, setKind] = useState("");
   const [q, setQ] = useState("");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
@@ -307,7 +329,7 @@ function StepsView({ runId, steps, spans, onOpenSpan, onChanged }) {
         <span><strong>{agentMsgs}</strong> agent messages</span>
         <span><strong>{results}</strong> tool / environment results</span>
         {steps.length - agentMsgs - results > 0 && <span><strong>{steps.length - agentMsgs - results}</strong> other messages</span>}
-        <span className="muted">from <strong>{spans.length}</strong> spans</span>
+        {showSpans && <span className="muted">from <strong>{spans.length}</strong> spans</span>}
         {tokens > 0 && <span><strong>{tokens.toLocaleString()}</strong> tokens</span>}
         {errors > 0 && <span className="err"><strong>{errors}</strong> with errors</span>}
         {annotated.length > 0 && <span>annotated root-cause step: <a href="#" onClick={(e) => { e.preventDefault(); setSelected(annotated[0].step); }}><strong>{annotated.map((s) => s.step).join(", ")}</strong></a></span>}
@@ -317,7 +339,7 @@ function StepsView({ runId, steps, spans, onOpenSpan, onChanged }) {
         One step = one message: an agent's message (its reasoning and the action it takes, together) is one step, and the result that comes back from a tool or the environment is the next step. Control decisions (routing, conditions) are not numbered.
         {dataset && " Step numbers are the dataset's own (each history entry's `step` field), so a localisation result points at the same message here."}
       </p>
-      {!dataset && <SpanStepMap runId={runId} onOpenSpan={onOpenSpan} />}
+      {!dataset && showSpans && <SpanStepMap runId={runId} onOpenSpan={onOpenSpan} />}
       <div className="split">
         <div className="card">
           <div className="row" style={{ padding: 10, borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
@@ -360,9 +382,9 @@ function StepsView({ runId, steps, spans, onOpenSpan, onChanged }) {
                 {step.model && <><dt>Model</dt><dd>{step.model}</dd></>}
                 {fmtTokens(step.tokens) && <><dt>Tokens</dt><dd className="mono">{fmtTokens(step.tokens)}</dd></>}
                 {!dataset && <><dt>Start / end</dt><dd>{fmtTime(step.start_time)} → {step.end_time ? fmtTime(step.end_time) : "…"}</dd><dt>Duration</dt><dd>{duration(step.start_time, step.end_time)}</dd></>}
-                <dt>Source span</dt><dd><a href="#" onClick={(e) => { e.preventDefault(); onOpenSpan(step.span_id); }} className="mono">{byId[step.span_id]?.name || step.span_id}</a></dd>
-                {step.nested_span_ids?.length > 0 && <><dt>Includes</dt><dd>{step.nested_span_ids.map((id) => <a key={id} href="#" onClick={(e) => { e.preventDefault(); onOpenSpan(id); }} style={{ marginRight: 8 }}>{byId[id]?.name || id}</a>)}</dd></>}
-                {step.duplicate_span_ids?.length > 0 && <><dt>Also recorded as</dt><dd className="muted">{step.duplicate_span_ids.map((id) => byId[id]?.name || id).join(", ")} (same call, another instrumentation)</dd></>}
+                {showSpans && <><dt>Source span</dt><dd><a href="#" onClick={(e) => { e.preventDefault(); onOpenSpan(step.span_id); }} className="mono">{byId[step.span_id]?.name || step.span_id}</a></dd></>}
+                {showSpans && step.nested_span_ids?.length > 0 && <><dt>Includes</dt><dd>{step.nested_span_ids.map((id) => <a key={id} href="#" onClick={(e) => { e.preventDefault(); onOpenSpan(id); }} style={{ marginRight: 8 }}>{byId[id]?.name || id}</a>)}</dd></>}
+                {showSpans && step.duplicate_span_ids?.length > 0 && <><dt>Also recorded as</dt><dd className="muted">{step.duplicate_span_ids.map((id) => byId[id]?.name || id).join(", ")} (same call, another instrumentation)</dd></>}
               </dl>
               {step.error && <div className="error-box"><strong>{step.error.type}</strong>: {step.error.message}</div>}
               {step.think && <div className="json"><div className="json-head" style={{ cursor: "default" }}>Reasoning (&lt;think&gt;)</div><pre style={{ margin: 0, padding: 10 }}>{step.think}</pre></div>}
