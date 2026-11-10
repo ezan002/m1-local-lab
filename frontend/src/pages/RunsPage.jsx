@@ -111,11 +111,83 @@ provider.add_span_processor(BatchSpanProcessor(
   );
 }
 
+// Imported dataset trajectories: the annotated (ground-truth) step next to the steps a method marked, one row each.
+function DatasetSummary({ refreshKey }) {
+  const [data, setData] = useState(null);
+  const [dataset, setDataset] = useState("");
+  const [source, setSource] = useState("");
+  const [tol, setTol] = useState(0);
+  const [filter, setFilter] = useState("all");
+  const [sort, setSort] = useState("id");
+  useEffect(() => { api(`/api/datasets/summary${dataset ? `?dataset=${encodeURIComponent(dataset)}` : ""}`).then(setData).catch(() => setData(null)); }, [dataset, refreshKey]);
+  if (!data || !data.items.length) return null;
+  const src = source || data.sources[0] || "";
+  const rows = data.items.map((it) => {
+    const m = it.marks[src];
+    const delta = m && it.label ? m.step - it.label.step : null;
+    const verdict = delta === null ? (m ? "no label" : "no mark") : delta === 0 ? "hit" : Math.abs(delta) <= tol ? "near" : "miss";
+    return { ...it, m, delta, verdict, agentHit: m && it.label && m.sender && it.label.sender ? m.sender === it.label.sender : null };
+  });
+  const scored = rows.filter((r) => r.delta !== null);
+  const pct = (n) => scored.length ? `${(100 * n / scored.length).toFixed(1)}%` : "–";
+  const hits = scored.filter((r) => r.delta === 0).length;
+  const within = scored.filter((r) => Math.abs(r.delta) <= tol).length;
+  const early = scored.filter((r) => r.delta < 0).length, late = scored.filter((r) => r.delta > 0).length;
+  const agentScored = scored.filter((r) => r.agentHit !== null), agentHits = agentScored.filter((r) => r.agentHit).length;
+  let shown = rows.filter((r) => filter === "all" || (filter === "miss" ? r.verdict === "miss" || r.verdict === "near" : r.verdict === filter));
+  if (sort === "delta") shown = [...shown].sort((a, b) => Math.abs(b.delta ?? -1) - Math.abs(a.delta ?? -1));
+  const open = (r, step) => { window.location.hash = `#/runs/${r.run_id}?step=${step ?? r.label?.step ?? r.m?.step ?? 0}`; };
+  return (
+    <details className="card card-pad dataset-summary" open>
+      <summary><strong>Dataset trajectories: annotated step vs. marked step</strong>
+        <span className="muted"> · {data.items.length} trajectories{src ? ` · compared with “${src}”` : " · no marks imported yet"}</span></summary>
+      <div className="row" style={{ margin: "10px 0", flexWrap: "wrap" }}>
+        {data.datasets.length > 1 && <select value={dataset} onChange={(e) => setDataset(e.target.value)} style={{ width: 160 }}><option value="">all datasets</option>{data.datasets.map((d) => <option key={d}>{d}</option>)}</select>}
+        {data.sources.length > 0 && <label className="muted">compare <select value={src} onChange={(e) => setSource(e.target.value)} style={{ width: 160 }}>{data.sources.map((x) => <option key={x}>{x}</option>)}</select></label>}
+        <label className="muted">tolerance ± <input type="number" min="0" value={tol} onChange={(e) => setTol(Math.max(0, Number(e.target.value) || 0))} style={{ width: 64 }} /> steps</label>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: 150 }}>
+          <option value="all">all rows</option><option value="hit">exact hits</option><option value="miss">not exact</option><option value="no mark">no mark</option>
+        </select>
+        <select value={sort} onChange={(e) => setSort(e.target.value)} style={{ width: 170 }}><option value="id">sort by question ID</option><option value="delta">sort by largest offset</option></select>
+      </div>
+      {src && (
+        <div className="steps-summary">
+          <span><strong>{scored.length}</strong> compared</span>
+          <span>exact hit <strong>{hits}</strong> ({pct(hits)})</span>
+          {tol > 0 && <span>within ±{tol} <strong>{within}</strong> ({pct(within)})</span>}
+          <span>marked earlier <strong>{early}</strong> · later <strong>{late}</strong></span>
+          {agentScored.length > 0 && <span>same sender as annotated step <strong>{agentHits}</strong> ({(100 * agentHits / agentScored.length).toFixed(1)}%)</span>}
+        </div>
+      )}
+      <div className="dataset-table-wrap">
+        <table className="table">
+          <thead><tr><th>Trajectory</th><th>Steps</th><th>Annotated step</th>{src && <><th>{src}</th><th>Offset</th><th>Result</th></>}</tr></thead>
+          <tbody>
+            {shown.map((r) => (
+              <tr key={r.run_id} className="clickable" onClick={() => open(r)}>
+                <td className="mono">{r.question_ID}</td>
+                <td>{r.messages ?? ""}</td>
+                <td>{r.label ? <a href="#" onClick={(e) => { e.preventDefault(); e.stopPropagation(); open(r, r.label.step); }}><strong>{r.label.step}</strong></a> : "–"}<span className="muted"> {r.label?.sender || ""}</span></td>
+                {src && <>
+                  <td>{r.m ? <a href="#" onClick={(e) => { e.preventDefault(); e.stopPropagation(); open(r, r.m.step); }}><strong>{r.m.step}</strong></a> : "–"}<span className="muted"> {r.m?.sender || ""}</span></td>
+                  <td className="mono">{r.delta === null ? "" : r.delta > 0 ? `+${r.delta}` : r.delta}</td>
+                  <td><span className={`verdict v-${r.verdict.replace(" ", "-")}`}>{r.verdict === "hit" ? "✓ hit" : r.verdict === "near" ? `≈ within ±${tol}` : r.verdict === "miss" ? "✗ miss" : r.verdict}</span></td>
+                </>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
 export default function RunsPage({ origin }) {
   const [runs, setRuns] = useState(null);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
+  const [summaryKey, setSummaryKey] = useState(0);
   const load = () => api(`/api/runs?origin=${origin}`).then(setRuns).catch(setError);
   useEffect(() => {
     load();
@@ -133,7 +205,8 @@ export default function RunsPage({ origin }) {
           <p>{external ? "Traces of agents built in any framework, imported as OpenTelemetry spans. Read-only: no checkpoints or execution control." : "Every execution of a Studio workflow, including forks and replays."}</p>
         </div>
       </div>
-      {external && <TraceImport onImported={load} />}
+      {external && <TraceImport onImported={() => { load(); setSummaryKey((k) => k + 1); }} />}
+      {external && <DatasetSummary refreshKey={summaryKey} />}
       <div className="row" style={{ marginBottom: 12 }}>
         <input placeholder="Search name or id" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 280 }} />
         <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ maxWidth: 180 }}>

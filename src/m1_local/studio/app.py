@@ -1,6 +1,8 @@
 """Agent Studio HTTP API + static frontend."""
 from __future__ import annotations
 
+import json
+
 import os
 import secrets
 from contextlib import asynccontextmanager
@@ -323,6 +325,55 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
         if not store.delete_step_mark(run_id, step, source):
             raise HTTPException(404, "no such mark")
         return {"deleted": True}
+
+    @app.get("/api/datasets/summary")
+    async def dataset_summary(dataset: str | None = None) -> dict[str, Any]:
+        """Every imported dataset trajectory with its annotated step and the steps marked on it (e.g. a localisation
+        method's prediction), for comparing them across the whole set."""
+        roots = store._query(
+            """SELECT run_id, attributes FROM spans WHERE parent_span_id IS NULL
+               AND json_extract(attributes, '$."dataset.name"') IS NOT NULL""")
+        items: dict[str, dict[str, Any]] = {}
+        names: set[str] = set()
+        for row in roots:
+            a = json.loads(row["attributes"] or "{}")
+            names.add(a["dataset.name"])
+            if dataset and a["dataset.name"] != dataset:
+                continue
+            label = a.get("dataset.label_step")
+            items[row["run_id"]] = {
+                "run_id": row["run_id"], "dataset": a["dataset.name"],
+                "question_ID": a.get("dataset.question_ID") or a.get("dataset.trajectory_id") or row["run_id"],
+                "messages": a.get("dataset.messages"),
+                "label": None if label is None else {"step": int(label), "agent": a.get("dataset.mistake_agent")},
+                "marks": {},
+            }
+        if not items:
+            return {"datasets": sorted(names), "sources": [], "items": []}
+        marks = [dict(m) for m in store._query("SELECT * FROM step_marks")] if items else []
+        sources = sorted({m["source"] for m in marks if m["run_id"] in items})
+        marks = [m for m in marks if m["run_id"] in items]
+        wanted = {(r, it["label"]["step"]) for r, it in items.items() if it["label"]} | {(m["run_id"], m["step"]) for m in marks}
+        senders: dict[tuple[str, int], str] = {}
+        ids = sorted({r for r, _ in wanted})
+        for chunk in range(0, len(ids), 400):
+            part = ids[chunk:chunk + 400]
+            for row in store._query(
+                    f"""SELECT run_id, json_extract(attributes, '$."dataset.step"') AS step,
+                               json_extract(attributes, '$."message.name"') AS sender
+                        FROM spans WHERE run_id IN ({','.join('?' * len(part))})
+                        AND json_extract(attributes, '$."dataset.step"') IS NOT NULL""", tuple(part)):
+                key = (row["run_id"], int(row["step"]))
+                if key in wanted:
+                    senders[key] = row["sender"]
+        for r, it in items.items():
+            if it["label"]:
+                it["label"]["sender"] = senders.get((r, it["label"]["step"]))
+        for m in marks:
+            items[m["run_id"]]["marks"][m["source"]] = {"step": m["step"], "note": m["note"],
+                                                        "sender": senders.get((m["run_id"], m["step"]))}
+        ordered = sorted(items.values(), key=lambda it: (it["dataset"], str(it["question_ID"])))
+        return {"datasets": sorted(names), "sources": sources, "items": ordered}
 
     @app.post("/api/marks/import")
     async def import_marks(body: MarksImportBody) -> dict[str, Any]:

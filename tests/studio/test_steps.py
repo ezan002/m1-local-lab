@@ -200,3 +200,18 @@ def test_reimporting_a_revised_trajectory_updates_its_annotation(client):
     assert second["runs"] == first["runs"] and second["updated"] == 1 and second["accepted"] == 0
     steps = client.get(f"/api/runs/{first['runs'][0]}/steps").json()
     assert [s["step"] for s in steps if s["labels"]] == [1] and steps[1]["labels"][0]["reason"] == "revised upstream"
+
+
+def test_dataset_summary_lines_up_annotations_and_marks(client):
+    for qid, label in (("q1", 3), ("q2", 1)):
+        rec = dict(LONGRCA, question_ID=qid, mistake_step=label)
+        client.post("/api/traces/import", json={"filename": f"{qid}.json", "content": json.dumps(rec)})
+    client.post("/api/marks/import", json={"source": "prediction", "items": [
+        {"question_ID": "q1", "step": 3}, {"question_ID": "q2", "step": 2}]})
+    data = client.get("/api/datasets/summary").json()
+    assert data["datasets"] == ["longrca"] and data["sources"] == ["prediction"]
+    by = {it["question_ID"]: it for it in data["items"]}
+    assert by["q1"]["label"] == {"step": 3, "agent": "DiagnostAgent (-> ActionAgent)", "sender": "ActionAgent"}
+    assert by["q1"]["marks"]["prediction"]["step"] == 3 and by["q2"]["marks"]["prediction"]["sender"] == "Computer_terminal"
+    assert by["q1"]["messages"] == 4
+    assert client.get("/api/datasets/summary", params={"dataset": "other"}).json()["items"] == []

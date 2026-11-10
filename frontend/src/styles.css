@@ -215,3 +215,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft
 .note-flag { border-left: 3px solid #e5484d; margin: 8px 0; }
 .note-mark { border-left: 3px solid #f08c00; margin: 8px 0; }
 .mark-bar { margin: 8px 0; gap: 6px; }
+.dataset-summary { margin-bottom: 14px; }
+.dataset-summary summary { cursor: pointer; font-size: 14px; }
+.dataset-table-wrap { max-height: 460px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.dataset-table-wrap thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.verdict { font-weight: 600; font-size: 12.5px; }
+.v-hit { color: #1f9d55; } .v-near { color: #b45f00; } .v-miss { color: #c62828; } .v-no-mark, .v-no-label { color: var(--muted); }

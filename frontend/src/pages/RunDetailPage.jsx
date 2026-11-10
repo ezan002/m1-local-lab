@@ -7,6 +7,11 @@ import { Badge, Empty, ErrorBox, Field, Icon, Json, Modal, ProviderBadge, Status
 const ACTIVE = new Set(["queued", "running", "pausing", "receiving"]);
 const CAP_LABEL = { execute: "execute", checkpoint: "checkpoints", pause_resume: "pause/resume", fork: "fork", replay: "replay", retry: "retry" };
 
+function stepQuery() {
+  const m = window.location.hash.match(/[?&]step=(-?\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
 function spanQuery() {
   const m = window.location.hash.match(/[?&]span=([\w-]+)/);
   return m ? m[1] : null;
@@ -16,9 +21,9 @@ export default function RunDetailPage({ runId }) {
   const [run, setRun] = useState(null);
   const [spans, setSpans] = useState([]);
   const [steps, setSteps] = useState([]);
-  const [focusStep, setFocusStep] = useState(null);
+  const [focusStep, setFocusStep] = useState(stepQuery() !== null ? { step: stepQuery(), at: 0 } : null);
   const [error, setError] = useState(null);
-  const [tab, setTab] = useState(spanQuery() ? "spans" : "graph");
+  const [tab, setTab] = useState(spanQuery() ? "spans" : stepQuery() !== null ? "steps" : "graph");
   const [selectedSpan, setSelectedSpan] = useState(spanQuery());
   const [actionError, setActionError] = useState(null);
 
