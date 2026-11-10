@@ -9,6 +9,9 @@ as a localisation method's chosen step: a JSON list [{"question_ID": "...", "ste
 (POST /api/marks/import). Re-running is safe: trajectories already imported are reported as duplicates and marks
 are replaced.
 
+Annotations in LongRCA are still being revised upstream; importing a newer download updates the annotation of
+trajectories already imported. Pin a dataset version for comparisons with `revision='<commit>'` below.
+
 Download a whole benchmark first, e.g. all SWE-bench Pro trajectories of LongRCA (needs `pip install huggingface_hub`):
 
     python -c "from huggingface_hub import snapshot_download; snapshot_download('CLoud5-real/longrca-bench', repo_type='dataset', allow_patterns='data/full/*swe_bench_pro__*', local_dir='data/longrca')"
@@ -51,13 +54,21 @@ def main() -> None:
 
     base = args.studio.rstrip("/")
     try:
-        token = call(base, "/api/meta", None, None)["csrf_token"]
+        meta = call(base, "/api/meta", None, None)
+        token = meta["csrf_token"]
     except Exception as exc:  # noqa: BLE001
         sys.exit(f"Agent Studio is not reachable at {base} ({exc}); start it first")
+    try:  # the dataset import and marks endpoints are new: a Studio started before updating does not have them
+        call(base, "/api/runs/_/marks", None, token)
+    except RuntimeError as exc:
+        if '"detail":"Not Found"' in str(exc).replace(" ", ""):  # no such route (a missing run says "run not found")
+            sys.exit("This Agent Studio is running older code without dataset import; restart it, then run this again")
 
     files = []
     for p in args.paths:
-        files += sorted(f for f in p.rglob("*") if f.suffix.lower() in SUFFIXES) if p.is_dir() else [p]
+        # skip hidden folders such as .cache/huggingface (download metadata, not trajectories)
+        files += sorted(f for f in p.rglob("*") if f.suffix.lower() in SUFFIXES
+                        and not any(part.startswith(".") for part in f.relative_to(p).parts)) if p.is_dir() else [p]
     ok = dup = 0
     for f in files:
         if f.suffix.lower() == ".parquet":
@@ -71,7 +82,8 @@ def main() -> None:
             continue
         ok += len(r.get("runs", []))
         dup += 1 if r.get("duplicates") and not r.get("accepted") else 0
-        print(f"  {f.name}: {r.get('format')} · {len(r.get('runs', []))} trajectory(ies) · {r.get('accepted')} spans")
+        note = f" · {r['updated']} updated (revised annotation)" if r.get("updated") else ""
+        print(f"  {f.name}: {r.get('format')} · {len(r.get('runs', []))} trajectory(ies) · {r.get('accepted')} new spans{note}")
     print(f"imported {len(files)} file(s), {ok} trajectory run(s){f', {dup} already present' if dup else ''}")
 
     if args.marks:

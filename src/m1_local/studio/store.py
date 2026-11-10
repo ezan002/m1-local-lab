@@ -232,6 +232,20 @@ class StudioStore:
                        span.get("start_time"), span.get("end_time"), span.get("checkpoint_id"), seq))
         return True
 
+    def refresh_span(self, span: dict[str, Any]) -> bool:
+        """Replace the content of an existing span (re-imported dataset trajectory with revised annotations);
+        returns True when something changed."""
+        with self._tx() as c:
+            row = c.execute("SELECT name,status,input,output,error,attributes FROM spans WHERE id=?", (span["id"],)).fetchone()
+            if row is None:
+                return False
+            new = (span["name"], span["status"], _dump(span.get("input")), _dump(span.get("output")),
+                   _dump(span.get("error")), _dump(span.get("attributes") or {}))
+            if tuple(row) == new:
+                return False
+            c.execute("UPDATE spans SET name=?,status=?,input=?,output=?,error=?,attributes=? WHERE id=?", (*new, span["id"]))
+        return True
+
     def spans(self, run_id: str) -> list[dict[str, Any]]:
         result = []
         for row in self._query("SELECT * FROM spans WHERE run_id=? ORDER BY seq", (run_id,)):

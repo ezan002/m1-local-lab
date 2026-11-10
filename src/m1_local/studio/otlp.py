@@ -127,7 +127,7 @@ def normalize_span(raw: dict[str, Any], service: str) -> dict[str, Any]:
 def ingest(store: StudioStore, payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict) or "resourceSpans" not in payload:
         raise OTLPError("payload must contain resourceSpans")
-    accepted, duplicates, rejected, runs = 0, 0, [], set()
+    accepted, duplicates, updated, rejected, runs = 0, 0, 0, [], set()
     correlated: set[str] = set()
     cache: dict[str, str | None] = {}
     for resource_spans in payload.get("resourceSpans", []):
@@ -160,12 +160,19 @@ def ingest(store: StudioStore, payload: dict[str, Any]) -> dict[str, Any]:
                                      provider_mode=str(resource.get("studio.provider_mode", "unknown")))
                 if store.insert_span(run_id, span):
                     accepted += 1
+                elif "dataset.name" in span["attributes"] or "dataset.step" in span["attributes"]:
+                    # A dataset trajectory imported again: take the new version (annotations get revised upstream).
+                    if store.refresh_span(span):
+                        updated += 1
+                    else:
+                        duplicates += 1
                 else:
                     duplicates += 1
                 runs.add(run_id)
     for run_id in runs:
         _refresh_external_run(store, run_id)
-    return {"accepted": accepted, "duplicates": duplicates, "rejected": rejected, "runs": sorted(runs | correlated)}
+    return {"accepted": accepted, "duplicates": duplicates, "updated": updated, "rejected": rejected,
+            "runs": sorted(runs | correlated)}
 
 
 def parse_trace_file(text: str, filename: str = "") -> list[dict[str, Any]]:
@@ -227,11 +234,12 @@ def ingest_file(store: StudioStore, text: str | bytes, filename: str = "") -> di
                 raise OTLPError("binary file that is not Parquet; expected OTLP JSON, JSON Lines or a Parquet dataset") from exc
     else:
         payloads, fmt = parse_trace_file_with_format(text, filename)
-    total = {"accepted": 0, "duplicates": 0, "rejected": [], "runs": set(), "payloads": 0, "format": fmt}
+    total = {"accepted": 0, "duplicates": 0, "updated": 0, "rejected": [], "runs": set(), "payloads": 0, "format": fmt}
     for payload in payloads:
         result = ingest(store, payload)
         total["accepted"] += result["accepted"]
         total["duplicates"] += result["duplicates"]
+        total["updated"] += result.get("updated", 0)
         total["rejected"] += result["rejected"]
         total["runs"] |= set(result["runs"])
         total["payloads"] += 1

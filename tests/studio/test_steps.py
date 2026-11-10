@@ -191,3 +191,12 @@ def test_trajectory_files_in_json_lines_and_lists():
     fmt, payloads = convert(json.dumps(history_as_string), "x.json")
     spans = payloads[0]["resourceSpans"][0]["scopeSpans"][0]["spans"]
     assert len(spans) == 5  # 4 messages + the trajectory root
+
+
+def test_reimporting_a_revised_trajectory_updates_its_annotation(client):
+    first = client.post("/api/traces/import", json={"filename": "a.json", "content": json.dumps(LONGRCA)}).json()
+    revised = dict(LONGRCA, mistake_step=1, mistake_agent="DiagnostAgent", mistake_reason="revised upstream")
+    second = client.post("/api/traces/import", json={"filename": "a.json", "content": json.dumps(revised)}).json()
+    assert second["runs"] == first["runs"] and second["updated"] == 1 and second["accepted"] == 0
+    steps = client.get(f"/api/runs/{first['runs'][0]}/steps").json()
+    assert [s["step"] for s in steps if s["labels"]] == [1] and steps[1]["labels"][0]["reason"] == "revised upstream"
