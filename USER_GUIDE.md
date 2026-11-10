@@ -138,6 +138,7 @@ fork 时允许修改的字段。对方代码不用改。详见 [studio-executor-
 - **一次导入整个 benchmark 和定位结果**（命令行，Studio 需在运行）：先下载数据（需要 `pip install huggingface_hub`）：
   `python -c "from huggingface_hub import snapshot_download; snapshot_download('CLoud5-real/longrca-bench', repo_type='dataset', allow_patterns='data/full/*swe_bench_pro__*', local_dir='data/longrca')"`，
   再运行 `python scripts/import_trajectories.py data/longrca --marks 定位结果.json --source localization`。
+- **整体对比（汇总表）**：External traces 页导入区下方的 “Dataset trajectories: annotated step vs. marked step” 表，每条轨迹一行：真值 step、某个标记来源（如 `prediction`）的 step、偏差和是否命中；顶部是完全命中率、偏早 / 偏晚条数。可设容差、只看未命中、按偏差排序，在 “compare” 里切换不同方法的标记。点步骤号直接打开那条轨迹并定位到那一步（链接形如 `#/runs/<id>?step=21`）。
 - **Studio 自己记录的运行**：每次模型调用（智能体的一条消息）是一步，每次工具调用的结果是一步。一个节点 span 可以包含多步，例如 Researcher 节点：模型决定调用工具 → 工具返回结果 → 模型写结论，共 3 步；节点 span、chain 序列、同一调用的重复记录都不是步骤，Steps 页的 “How N spans became M steps” 对照表逐个说明。
 
 结构图从哪来：接入的智能体，结构来自它运行时的 LangGraph 图对象，所以没走到的节点也会画出来；外部轨迹没有图对象，
