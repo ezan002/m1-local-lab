@@ -28,10 +28,10 @@ Windows 也可以用 `.\scripts\start-studio.ps1 -Demo`。用自己的数据：�
 | 功能 | 说明 |
 |---|---|
 | **Connected agents** | 接入在自己进程里运行的 LangGraph 智能体（M1、第三方智能体、用 SDK 包装的任意智能体），在 Studio 里发起运行、暂停、继续 |
-| **运行详情** | Graph（结构与走过的路径）、Timeline（耗时）、Spans（调用树）、**Steps**（把运行拆成智能体实际做的动作，按 1..N 编号：每次模型调用、工具调用、路由判断、无调用的控制节点各一步；比节点更细，一个节点里有几次调用就拆成几步；附 span → step 对照表） |
+| **运行详情** | Graph（结构与走过的路径）、Timeline（耗时）、Spans（调用树）、**Steps**（消息级步骤，与 LongRCA / Who&When 等数据集的标注口径一致：智能体的一条消息（思考 + 动作）是一步，工具或环境返回的结果是下一步；导入的数据集轨迹直接使用数据集自己的 step 编号，可显示标注的根因步骤并标记定位结果） |
 | **Replay / Fork** | 从任一检查点原样重放，或修改这一步的输出后分支运行；检查点之前的步骤直接继承 |
 | **Compare** | 分支与原运行逐节点对比：inherited / same / differs |
-| **External traces** | 上传 OTLP JSON 或 Codex 会话文件，或实时接收 `/v1/traces`；只读查看 |
+| **External traces** | 上传 OTLP JSON、Codex 会话文件或轨迹数据集（LongRCA 等，.json / .jsonl / .parquet），或实时接收 `/v1/traces`；只读查看 |
 
 全部只监听本机 `127.0.0.1`，数据存在本地 SQLite。
 

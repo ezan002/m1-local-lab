@@ -21,7 +21,8 @@ from .otlp import OTLPError, decode_request, ingest, ingest_file
 from .runtime_support import TOOLS
 from .schema import WorkflowDefinition
 from .seeds import seed
-from .steps import build_steps, span_roles
+from .steps import build_steps, label_steps, span_roles
+from .converters import trajectory_run_id
 from .store import StudioStore
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -96,6 +97,20 @@ def tree_order(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
 class TraceFileBody(BaseModel):
     filename: str = Field(default="", max_length=300)
     content: str
+    encoding: str = Field(default="text", pattern="^(text|base64)$")  # base64 for binary files (Parquet)
+
+
+class StepMarkBody(BaseModel):
+    step: int
+    source: str = Field(default="localization", min_length=1, max_length=60)
+    note: str = Field(default="", max_length=2000)
+
+
+class MarksImportBody(BaseModel):
+    # [{"question_ID" | "run_id": ..., "step": 25, "source"?: "localization", "note"?: "..."}]
+    items: list[dict[str, Any]]
+    source: str = Field(default="localization", min_length=1, max_length=60)
+    dataset: str = Field(default="longrca", max_length=60)
 
 
 class ImportBody(BaseModel):
@@ -271,11 +286,61 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
         _run(run_id)
         return tree_order(store.spans(run_id))
 
+    def _steps_with_marks(run_id: str) -> list[dict[str, Any]]:
+        spans = tree_order(store.spans(run_id))
+        steps = build_steps(spans)
+        labels = label_steps(spans)
+        marks: dict[int, list[dict[str, Any]]] = {}
+        for m in store.step_marks(run_id):
+            marks.setdefault(m["step"], []).append(m)
+        for st in steps:
+            st["labels"] = labels.get(st["step"], [])
+            st["marks"] = marks.get(st["step"], [])
+        return steps
+
     @app.get("/api/runs/{run_id}/steps")
     async def steps(run_id: str) -> list[dict[str, Any]]:
-        """The run as numbered atomic actions (model calls, tool calls, control nodes); see studio/steps.py."""
+        """The run as numbered message-level steps (see studio/steps.py), with dataset labels and marks."""
         _run(run_id)
-        return build_steps(tree_order(store.spans(run_id)))
+        return _steps_with_marks(run_id)
+
+    @app.get("/api/runs/{run_id}/marks")
+    async def list_marks(run_id: str) -> list[dict[str, Any]]:
+        _run(run_id)
+        return store.step_marks(run_id)
+
+    @app.put("/api/runs/{run_id}/marks")
+    async def put_mark(run_id: str, body: StepMarkBody) -> dict[str, Any]:
+        """Mark a step, e.g. the failure step a localisation method chose (`source`), with an optional note."""
+        _run(run_id)
+        if body.step not in {st["step"] for st in build_steps(tree_order(store.spans(run_id)))}:
+            raise HTTPException(400, f"step {body.step} is not a step of this run")
+        return store.set_step_mark(run_id, body.step, body.source, body.note)
+
+    @app.delete("/api/runs/{run_id}/marks")
+    async def delete_mark(run_id: str, step: int, source: str = "localization") -> dict[str, Any]:
+        _run(run_id)
+        if not store.delete_step_mark(run_id, step, source):
+            raise HTTPException(404, "no such mark")
+        return {"deleted": True}
+
+    @app.post("/api/marks/import")
+    async def import_marks(body: MarksImportBody) -> dict[str, Any]:
+        """Attach many localisation results at once: items name a run by `run_id` or by the dataset's `question_ID`."""
+        applied, missing = [], []
+        for item in body.items:
+            run_id = item.get("run_id") or (trajectory_run_id(str(item["question_ID"]), body.dataset) if item.get("question_ID") else None)
+            try:
+                step = int(item.get("step"))
+            except (TypeError, ValueError):
+                missing.append({"item": item, "reason": "step is not an integer"})
+                continue
+            if not run_id or store.get_run(run_id) is None:
+                missing.append({"item": item, "reason": "trajectory not imported"})
+                continue
+            store.set_step_mark(run_id, step, str(item.get("source") or body.source), str(item.get("note") or ""))
+            applied.append({"run_id": run_id, "step": step})
+        return {"applied": applied, "missing": missing}
 
     @app.get("/api/runs/{run_id}/step-map")
     async def step_map(run_id: str) -> dict[str, Any]:
@@ -394,10 +459,19 @@ def create_app(data_dir: Path | None = None, *, port: int = 8100, seed_demo: boo
     @app.post("/api/traces/import")
     async def import_traces(body: TraceFileBody) -> dict[str, Any]:
         """Import a trace file (OTLP JSON / JSON Lines) uploaded from the External traces page."""
-        if len(body.content) > 32 * 1024 * 1024:
-            raise HTTPException(413, "file too large (limit 32 MB)")
+        if len(body.content) > 200 * 1024 * 1024:
+            raise HTTPException(413, "file too large (limit 150 MB)")
+        content: str | bytes = body.content
+        if body.encoding == "base64":
+            import base64
+            import binascii
+
+            try:
+                content = base64.b64decode(body.content, validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise HTTPException(400, "content is not valid base64") from exc
         try:
-            result = ingest_file(store, body.content, body.filename)
+            result = ingest_file(store, content, body.filename)
         except OTLPError as exc:
             raise HTTPException(400, str(exc)) from exc
         if result["rejected"] and not result["accepted"] and not result["duplicates"]:

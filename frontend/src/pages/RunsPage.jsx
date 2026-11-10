@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, duration, fmtTime, meta } from "../api.js";
 import { Badge, Empty, ErrorBox, Field, Icon, ProviderBadge, Status } from "../components/ui.jsx";
 
-const MAX_FILE = 32 * 1024 * 1024;
+const MAX_FILE = 150 * 1024 * 1024;
 
 // "Import on top, list below" (like Connected agents): bring traces in from a file or live over OTLP/HTTP.
 function TraceImport({ onImported }) {
@@ -16,11 +16,16 @@ function TraceImport({ onImported }) {
   const upload = async () => {
     if (!file) return;
     setError(null); setResult(null);
-    if (file.size > MAX_FILE) { setError(new Error("file too large (limit 32 MB)")); return; }
+    if (file.size > MAX_FILE) { setError(new Error("file too large (limit 150 MB)")); return; }
     setBusy(true);
     try {
-      const content = await file.text();
-      const r = await api("/api/traces/import", { method: "POST", body: { filename: file.name, content } });
+      let body;
+      if (/\.parquet$/i.test(file.name)) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        body = { filename: file.name, content: btoa(bin), encoding: "base64" };
+      } else body = { filename: file.name, content: await file.text() };
+      const r = await api("/api/traces/import", { method: "POST", body });
       setResult(r);
       onImported?.();
     } catch (e) { setError(e); } finally { setBusy(false); }
@@ -31,11 +36,12 @@ function TraceImport({ onImported }) {
       <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
         Traces are OpenTelemetry spans. Upload a file in OTLP JSON format (one request object, an array, or JSON
         Lines), or a raw trajectory that is converted to spans on import: <b>Codex session</b> (
-        <code>%USERPROFILE%\.codex\sessions\…\rollout-*.jsonl</code>). Agents can also export spans live to the endpoint below.
+        <code>%USERPROFILE%\.codex\sessions\…\rollout-*.jsonl</code>) or a <b>trajectory dataset</b> such as LongRCA
+        (<code>.json</code> / <code>.jsonl</code> / <code>.parquet</code> records with a <code>history</code> list; one step per message, numbered by the dataset's own <code>step</code>). Agents can also export spans live to the endpoint below.
       </p>
       <div className="row" style={{ alignItems: "flex-end" }}>
-        <Field label="Trace file (.json / .jsonl)">
-          <input type="file" accept=".json,.jsonl,.ndjson,application/json" onChange={(e) => { setFile(e.target.files?.[0] || null); setResult(null); setError(null); }} />
+        <Field label="Trace file (.json / .jsonl / .parquet)">
+          <input type="file" accept=".json,.jsonl,.ndjson,.parquet,application/json" onChange={(e) => { setFile(e.target.files?.[0] || null); setResult(null); setError(null); }} />
         </Field>
         <button className="primary" onClick={upload} disabled={!file || busy}><Icon name="plug" /> {busy ? "Importing…" : "Import file"}</button>
         <button onClick={() => setShowLive(!showLive)}>{showLive ? "Hide" : "Show"} live endpoint (OTLP/HTTP)</button>

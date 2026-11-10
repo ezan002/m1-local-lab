@@ -19,7 +19,7 @@ def span(id, parent, kind, name, start, end, node_id=None, **extra):
             "output": extra.pop("output", None), "error": None, "attributes": extra.pop("attributes", {}), **extra}
 
 
-def test_workflow_run_numbers_actions_and_keeps_control_nodes():
+def test_workflow_run_numbers_messages_and_leaves_control_unnumbered():
     spans = [
         span("root", None, "workflow", "wf", 0, 9),
         span("n1", "root", "start", "Brief", 0.0, 0.01, "start"),
@@ -31,12 +31,14 @@ def test_workflow_run_numbers_actions_and_keeps_control_nodes():
         span("p1", "root", "pause", "paused before x", 5.5, 5.6, "x"),
     ]
     steps = build_steps(spans)
-    assert [s["step"] for s in steps] == [1, 2, 3, 4, 5]
-    assert [(s["kind"], s["span_id"], s["agent"]) for s in steps] == [
-        ("start", "n1", "Brief"), ("llm", "l1", "Researcher"), ("tool", "t1", "Researcher"),
-        ("llm", "l2", "Researcher"), ("condition", "n3", "Needs revision?")]
-    assert steps[1]["tokens"] == {"prompt": 10, "completion": 5, "total": 15} and steps[1]["model"] == "m"
-    assert steps[1]["duration_ms"] == 1000
+    # agent message (decides on the tool) -> tool result -> agent message (writes the conclusion)
+    assert [(s["step"], s["kind"], s["span_id"], s["agent"]) for s in steps] == [
+        (1, "llm", "l1", "Researcher"), (2, "tool", "t1", "Researcher"), (3, "llm", "l2", "Researcher")]
+    assert steps[0]["tokens"] == {"prompt": 10, "completion": 5, "total": 15} and steps[0]["model"] == "m"
+    assert steps[0]["duration_ms"] == 1000
+    from m1_local.studio.steps import span_roles
+    roles = {r["span_id"]: r["role"] for r in span_roles(spans, steps)}
+    assert roles["n1"] == roles["n3"] == "control" and roles["n2"] == "container"
 
 
 def test_duplicate_instrumentation_is_listed_once_and_covers_the_mirrored_node():
@@ -110,12 +112,13 @@ def test_steps_endpoint_for_a_studio_workflow_run(client):
         time.sleep(0.1)
     steps = client.get(f"/api/runs/{run_id}/steps").json()
     kinds = [s["kind"] for s in steps]
-    assert kinds[0] == "start" and kinds[-1] == "output"
-    assert {"llm", "tool", "condition"} <= set(kinds) and "agent" not in kinds  # agent nodes are covered by their calls
+    assert set(kinds) <= {"llm", "tool"} and {"llm", "tool"} <= set(kinds)  # messages only; control is not numbered
+    assert [s["step"] for s in steps] == list(range(1, len(steps) + 1))
+    assert all(s["labels"] == [] and s["marks"] == [] for s in steps)
     assert all(s["agent"] for s in steps)
 
 
-def test_routing_decision_is_a_step_and_every_span_is_explained():
+def test_routing_is_control_not_a_step_and_every_span_is_explained():
     from m1_local.studio.steps import span_roles
     spans = [
         span("cr", None, "workflow", "M1 run", 0, 60),
@@ -133,10 +136,58 @@ def test_routing_decision_is_a_step_and_every_span_is_explained():
         span("commit", "run", "chain", "m1.checkpoint.commit", 30, 30.01, attributes={"langgraph_node": "orchestrator"}),
     ]
     steps = build_steps(spans)
-    assert [(s["kind"], s["agent"]) for s in steps] == [("llm", "Orchestrator"), ("route", "Orchestrator"), ("llm", "Finalizer")]
-    assert steps[1]["output"]["next"] == "Finalizer"
+    assert [(s["kind"], s["agent"]) for s in steps] == [("llm", "Orchestrator"), ("llm", "Finalizer")]
     roles = {r["span_id"]: (r["role"], r["steps"]) for r in span_roles(spans, steps)}
     assert len(roles) == len(spans)
-    assert roles["chat"] == ("step", [1]) and roles["route"] == ("step", [2])
-    assert roles["o"] == ("container", [1, 2]) and roles["cn_o"] == ("container", [1]) and roles["cr"][0] == "root"
+    assert roles["chat"] == ("step", [1]) and roles["route"] == ("control", [])
+    assert roles["o"] == ("container", [1]) and roles["cn_o"] == ("container", [1]) and roles["cr"][0] == "root"
     assert roles["parse"][0] == "plumbing" and roles["commit"][0] == "plumbing"
+
+
+LONGRCA = {
+    "question_ID": "swe_bench_pro__001",
+    "history": [
+        {"step": 0, "role": "user", "content": "You are working on the repository foo."},
+        {"step": 1, "role": "assistant", "name": "DiagnostAgent", "content": "<think>look at tests</think>run pytest"},
+        {"step": 2, "role": "user", "name": "Computer_terminal", "content": "2 failed"},
+        {"step": 3, "role": "assistant", "name": "ActionAgent", "content": "<think>patch</think>edit file"},
+    ],
+    "mistake_agent": "DiagnostAgent (-> ActionAgent)", "mistake_step": 3, "mistake_reason": "wrong patch",
+}
+
+
+def test_longrca_trajectory_keeps_the_dataset_step_numbers(client):
+    r = client.post("/api/traces/import", json={"filename": "swe_bench_pro__001.json", "content": json.dumps(LONGRCA)})
+    assert r.status_code == 200, r.text
+    assert r.json()["format"] == "longrca"
+    run_id = r.json()["runs"][0]
+    from m1_local.studio.converters import trajectory_run_id
+    assert run_id == trajectory_run_id("swe_bench_pro__001")
+    steps = client.get(f"/api/runs/{run_id}/steps").json()
+    assert [(s["step"], s["kind"], s["agent"]) for s in steps] == [
+        (0, "chain", "user"), (1, "agent", "DiagnostAgent"), (2, "tool", "Computer_terminal"), (3, "agent", "ActionAgent")]
+    assert steps[1]["think"] == "look at tests" and steps[2]["output"] == "2 failed"
+    assert steps[3]["labels"][0]["agent"] == "DiagnostAgent (-> ActionAgent)" and not steps[1]["labels"]
+    # a localisation result, then many at once by question id
+    assert client.put(f"/api/runs/{run_id}/marks", json={"step": 1, "note": "model says step 1"}).status_code == 200
+    assert client.put(f"/api/runs/{run_id}/marks", json={"step": 99}).status_code == 400
+    bulk = client.post("/api/marks/import", json={"source": "method-b", "items": [
+        {"question_ID": "swe_bench_pro__001", "step": 2}, {"question_ID": "missing", "step": 1}]}).json()
+    assert len(bulk["applied"]) == 1 and bulk["missing"][0]["reason"] == "trajectory not imported"
+    steps = client.get(f"/api/runs/{run_id}/steps").json()
+    assert [m["source"] for m in steps[1]["marks"]] == ["localization"] and steps[2]["marks"][0]["source"] == "method-b"
+    assert client.delete(f"/api/runs/{run_id}/marks", params={"step": 1}).status_code == 200
+    assert client.get(f"/api/runs/{run_id}/marks").json()[0]["step"] == 2
+
+
+def test_trajectory_files_in_json_lines_and_lists():
+    from m1_local.studio.converters import convert
+    rows = [dict(LONGRCA, question_ID=f"q{i}") for i in range(3)]
+    fmt, payloads = convert("\n".join(json.dumps(r) for r in rows), "mini.jsonl")
+    assert fmt == "longrca" and len(payloads) == 3
+    fmt, payloads = convert(json.dumps(rows), "mini.json")
+    assert len(payloads) == 3
+    history_as_string = dict(LONGRCA, history=json.dumps(LONGRCA["history"]))
+    fmt, payloads = convert(json.dumps(history_as_string), "x.json")
+    spans = payloads[0]["resourceSpans"][0]["scopeSpans"][0]["spans"]
+    assert len(spans) == 5  # 4 messages + the trajectory root

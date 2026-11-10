@@ -126,25 +126,16 @@ fork 时允许修改的字段。对方代码不用改。详见 [studio-executor-
 | **Graph** | 智能体的结构图。绿色是这次走过的节点，变淡的是没走到的，虚线是条件边 | 点节点看它的 span |
 | **Timeline** | 每一步的开始时间和耗时 | 找最慢的一步 |
 | **Spans** | 所有 span 的树（运行 → 节点 → 模型 / 工具调用） | 按名称、类型、状态筛选；右侧看输入、输出、属性 |
-| **Steps** | 运行拆成编号步骤 1..N：每次模型调用、工具调用、路由判断、无调用的控制节点各算一步（规则见下） | 顶部是统计（步数、模型调用、工具调用、token、报错数）；展开“How N spans became M steps”看每个 span 和步骤的对应关系；点一步看输入输出，可跳回对应 span |
+| **Steps** | 运行拆成消息级步骤（规则见下） | 顶部是统计和标注 / 标记的步骤；点一步看消息内容、推理（&lt;think&gt;），可跳回对应 span；可把某一步标记为定位结果 |
 | **Checkpoints & fork** | 每一步结束时的完整状态 | 重放或分支，见第 5 节 |
 | **Compare** | 两个相关运行逐节点对比 | 见第 5 节 |
 | **Run input/output** | 整次运行的输入和最终输出 | |
 
-**step 和 span 的关系**：一个节点 span 可以包含多个 step。例如 Researcher 节点的一次执行产生 4 个 span：
+**step 的定义（与 LongRCA / Who&When 的标注口径一致）**：一条消息是一步。智能体的一条消息（`<think>` 推理和它采取的动作合在一起）是一步，工具或环境返回的结果（例如 `Computer_terminal` 的输出）是下一步。路由判断、条件节点这类控制决策不是消息，不编号（在 span 对照表里标为 control）。
 
-```
-Researcher（节点 span）            ← 外壳，不算步骤
- ├─ llm：模型决定调用工具          → 第 1 步
- ├─ tool：执行 word_count          → 第 2 步
- └─ llm：模型根据结果写结论        → 第 3 步
-```
-
-- 和节点比，step 更细：一个节点里有几次模型或工具调用，就拆成几步。
-- 和全部 span 比，step 不会更多：最底层的每个调用 span 本身就是一步；其余 span 是外壳（节点、运行、chain 序列）、
-  同一次调用的重复记录（两套埋点各记一次）或没有操作的连接件（提示词拼接、解析、保存检查点）。
-- 例：M1 的一次真实运行有 26 个 span，实际是 3 次模型调用和 1 次路由判断，所以是 4 步；26 个 span 里有 3 个重复记录、
-  14 个外壳、5 个连接件。Steps 页的对照表会逐个列出。
+- **导入的数据集轨迹**（External traces 上传 LongRCA 的 `.json` / `.jsonl` / `.parquet`）：`history` 里每一条消息就是一步，编号直接用消息自己的 `step` 字段（step 0 是任务说明），所以定位方法输出的“step 25”与数据集、Studio 指向同一条消息。数据集自带的标注（`mistake_step`、`mistake_agent`、`mistake_reason`）显示为红色旗标。读取 `.parquet` 需要 `pip install pyarrow`（或 `pip install -e ".[datasets]"`）。
+- **标记定位结果**：在 Steps 页选中一步，填写来源（如 `localization` 或方法名）和备注，点 **Mark step N**，显示为橙色旗标。批量导入：`POST /api/marks/import`，内容为 `{"source": "方法名", "items": [{"question_ID": "swe_bench_pro__012", "step": 21}, ...]}`。
+- **Studio 自己记录的运行**：每次模型调用（智能体的一条消息）是一步，每次工具调用的结果是一步。一个节点 span 可以包含多步，例如 Researcher 节点：模型决定调用工具 → 工具返回结果 → 模型写结论，共 3 步；节点 span、chain 序列、同一调用的重复记录都不是步骤，Steps 页的 “How N spans became M steps” 对照表逐个说明。
 
 结构图从哪来：接入的智能体，结构来自它运行时的 LangGraph 图对象，所以没走到的节点也会画出来；外部轨迹没有图对象，
 结构由 span 的父子关系拼成，只包含实际执行过的部分。

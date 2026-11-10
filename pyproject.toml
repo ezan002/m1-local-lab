@@ -29,6 +29,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest==9.1.1", "pytest-asyncio==1.4.0", "httpx==0.28.1"]
+datasets = ["pyarrow==26.0.1"]  # import Parquet trajectory datasets (e.g. LongRCA) on External traces
 
 [project.scripts]
 m1-local = "m1_local.cli:main"

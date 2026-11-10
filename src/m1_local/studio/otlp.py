@@ -206,12 +206,27 @@ def parse_trace_file_with_format(text: str, filename: str = "") -> tuple[list[di
     if bad:
         raise OTLPError(f"{len(bad)} of {len(payloads)} records have no resourceSpans (first: record {bad[0]}); "
                         "the file must be OpenTelemetry traces in OTLP JSON format, or a supported raw trajectory "
-                        "(Codex session .jsonl)")
+                        "(Codex session .jsonl, or a trajectory dataset with a `history` list such as LongRCA)")
     return payloads, "otlp"
 
 
-def ingest_file(store: StudioStore, text: str, filename: str = "") -> dict[str, Any]:
-    payloads, fmt = parse_trace_file_with_format(text, filename)
+def ingest_file(store: StudioStore, text: str | bytes, filename: str = "") -> dict[str, Any]:
+    if isinstance(text, bytes):
+        from .converters import ConversionError, convert_bytes
+
+        try:
+            converted = convert_bytes(text, filename)
+        except ConversionError as exc:
+            raise OTLPError(str(exc)) from exc
+        if converted:
+            payloads, fmt = converted[1], converted[0]
+        else:
+            try:
+                payloads, fmt = parse_trace_file_with_format(text.decode("utf-8"), filename)
+            except UnicodeDecodeError as exc:
+                raise OTLPError("binary file that is not Parquet; expected OTLP JSON, JSON Lines or a Parquet dataset") from exc
+    else:
+        payloads, fmt = parse_trace_file_with_format(text, filename)
     total = {"accepted": 0, "duplicates": 0, "rejected": [], "runs": set(), "payloads": 0, "format": fmt}
     for payload in payloads:
         result = ingest(store, payload)

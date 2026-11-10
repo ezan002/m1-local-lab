@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS spans (
 );
 CREATE INDEX IF NOT EXISTS spans_run ON spans(run_id, seq);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS step_marks (  -- a step marked on a run, e.g. the failure step a localisation method chose
+  run_id TEXT NOT NULL, step INTEGER NOT NULL, source TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL, PRIMARY KEY (run_id, step, source)
+);
 CREATE TABLE IF NOT EXISTS connectors (
   id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL,
   mode TEXT NOT NULL,              -- attach (agent already running) | launch (Studio starts the agent process)
@@ -236,6 +240,21 @@ class StudioStore:
                 item[key] = _load(item[key])
             result.append(item)
         return result
+
+    # ---- step marks ------------------------------------------------------
+    def step_marks(self, run_id: str) -> list[dict[str, Any]]:
+        return [dict(r) for r in self._query("SELECT * FROM step_marks WHERE run_id=? ORDER BY step, source", (run_id,))]
+
+    def set_step_mark(self, run_id: str, step: int, source: str, note: str = "") -> dict[str, Any]:
+        record = {"run_id": run_id, "step": step, "source": source, "note": note, "created_at": now()}
+        with self._tx() as c:
+            c.execute("INSERT OR REPLACE INTO step_marks (run_id,step,source,note,created_at) VALUES (?,?,?,?,?)",
+                      tuple(record.values()))
+        return record
+
+    def delete_step_mark(self, run_id: str, step: int, source: str) -> bool:
+        with self._tx() as c:
+            return c.execute("DELETE FROM step_marks WHERE run_id=? AND step=? AND source=?", (run_id, step, source)).rowcount > 0
 
     def find_remote_run(self, connector_id: str, remote_run_id: str) -> dict[str, Any] | None:
         rows = self._query("SELECT * FROM runs WHERE origin='connected' AND integration=? AND remote_run_id=?", (connector_id, remote_run_id))

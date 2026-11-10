@@ -1,21 +1,28 @@
-"""Step view: a run as a numbered list of its atomic actions.
+"""Step view: a run as a numbered list of message-level steps.
 
-A span can be coarse: a node span covers everything one node did, and an agent span may hold several model and
-tool calls. The step view flattens a run into the actions the agent actually took, numbered 1..N in time order:
+The step definition follows the trajectory datasets the research group annotates (LongRCA, Who&When): one step is
+one message. An agent's message (its reasoning and the action it takes, together) is one step; the result that comes
+back from the environment or a tool is the next step. Control decisions (routing, condition nodes) are not messages
+and are not numbered.
 
-- every model call (``llm``) and tool call (``tool``, ``retriever``, ``embedding``, ``reranker``) is one step;
-  nested calls of the same kind (a file change recorded under the tool call that made it) belong to the outer step;
+Imported dataset trajectories carry their own numbering (`dataset.step` on each message span): those numbers are used
+as they are, so "step 25" in a localisation result, in the dataset and in the Studio is the same message.
+
+For runs recorded as OpenTelemetry spans the steps are derived from the spans, numbered 1..N in time order:
+
+- every model call (``llm``: the agent's message) and every tool call (``tool``, ``retriever``, ``embedding``,
+  ``reranker``: the result that comes back) is one step; nested records of the same kind (a file change recorded
+  under the tool call that made it) belong to the outer step;
 - the same model call recorded twice by two instrumentations (for example LangChain's ``ChatOpenAI`` span and the
   agent's own ``m1.model.*`` span) is listed once, keeping the record with more content;
-- a graph node that made no model or tool call (a condition, Start, Output, or a node of an uninstrumented agent)
-  is one step of its own, so control steps are not lost;
-- a routing decision of a LangGraph conditional edge (e.g. ``after_orchestrator`` choosing the next worker) is one
-  control step, like a condition node of a Studio workflow;
+- a node of an uninstrumented agent (it made no recorded call, but it is the agent acting) is one step;
+- Studio control nodes (Start, Condition, Output) and LangGraph routing functions (e.g. ``after_orchestrator``) are
+  control, not messages: they are listed in the span map as control but not numbered;
 - plumbing spans (other ``chain`` spans such as prompt/parse sequences and checkpoint saves, the workflow root, pause
   and edit markers) are never steps.
 
 ``span_roles`` explains every span of the run against the steps (is step N, same call as step N, part of step N,
-contains steps a-b, or no operation), so the reader can check how N spans became M steps.
+contains steps a-b, control, or no operation), so the reader can check how N spans became M steps.
 
 Each step keeps the id of the span it came from, so the UI can jump from a step to the full span.
 """
@@ -25,6 +32,7 @@ from datetime import datetime
 from typing import Any
 
 ACTION_KINDS = {"llm", "tool", "retriever", "embedding", "reranker"}
+CONTROL_NODE_KINDS = {"start", "condition", "output"}
 NEVER_STEPS = {"workflow", "pause", "edit", "chain"}
 DUPLICATE_WINDOW_S = 0.25
 COVER_SLACK_S = 1.0
@@ -65,7 +73,37 @@ def _tokens(span: dict[str, Any]) -> dict[str, int]:
     return result
 
 
+def _dataset_steps(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    msgs = [s for s in spans if "dataset.step" in (s.get("attributes") or {})]
+    msgs.sort(key=lambda s: (int(s["attributes"]["dataset.step"]), int(s["attributes"].get("dataset.position", 0))))
+    steps = []
+    for s in msgs:
+        a = s["attributes"]
+        steps.append({
+            "step": int(a["dataset.step"]), "dataset_position": int(a.get("dataset.position", 0)), "span_id": s["id"],
+            "kind": s.get("kind"), "name": s.get("name"), "agent": a.get("message.name"), "role": a.get("message.role"),
+            "status": s.get("status"), "start_time": None, "end_time": None, "duration_ms": None, "model": None,
+            "tokens": {}, "input": s.get("input"), "output": s.get("output"), "think": a.get("message.think"),
+            "error": s.get("error"), "nested_span_ids": [], "duplicate_span_ids": [], "source": "dataset",
+        })
+    return steps
+
+
+def label_steps(spans: list[dict[str, Any]]) -> dict[int, list[dict[str, Any]]]:
+    """Annotations shipped with an imported dataset trajectory (e.g. LongRCA's human-labelled root-cause step)."""
+    out: dict[int, list[dict[str, Any]]] = {}
+    for s in spans:
+        a = s.get("attributes") or {}
+        if s.get("parent_span_id") is None and a.get("dataset.label_step") is not None:
+            out.setdefault(int(a["dataset.label_step"]), []).append({
+                "type": "dataset annotation", "agent": a.get("dataset.mistake_agent"),
+                "reason": a.get("dataset.mistake_reason"), "dataset": a.get("dataset.name")})
+    return out
+
+
 def build_steps(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if any("dataset.step" in (s.get("attributes") or {}) for s in spans):
+        return _dataset_steps(spans)
     by_id = {s["id"]: s for s in spans}
     children: dict[str, list[dict[str, Any]]] = {}
     for s in spans:
@@ -125,7 +163,7 @@ def build_steps(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return node_key(action) == node.get("node_id") and None not in (n0, a0) \
             and n0 - COVER_SLACK_S <= a0 <= (n1 if n1 is not None else a0) + COVER_SLACK_S
 
-    node_steps = [n for n in graph_nodes if not any(covers(n, a) for a in actions)]
+    node_steps = [n for n in graph_nodes if n.get("kind") not in CONTROL_NODE_KINDS and not any(covers(n, a) for a in actions)]
 
     # 4. Routing decisions: LangGraph runs a conditional edge as a childless chain directly under the node that owns it
     #    (OpenInference names it after the routing function). Plumbing runnables are excluded by name.
@@ -137,14 +175,18 @@ def build_steps(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
             and parent.get("kind") == "chain" and grand is not None and grand.get("name") == "LangGraph" \
             and not name.startswith(("Runnable", "Channel", "__", "_write", "_route"))
 
-    routes = [s for s in spans if is_route(s)]
+    routes: list[dict[str, Any]] = []  # routing is control, not a message: listed in the span map, not numbered
 
     # 5. Leaves of external traces that are neither actions nor plumbing (e.g. an agent span with no calls).
-    chosen = {s["id"] for s in actions} | {s["id"] for s in node_steps} | {s["id"] for s in routes}
+    controls = {s["id"] for s in spans if is_route(s)} | {n["id"] for n in graph_nodes if n.get("kind") in CONTROL_NODE_KINDS}
+    chosen = {s["id"] for s in actions} | {s["id"] for s in node_steps} | controls
     leaves = [s for s in spans if s["id"] not in chosen and not children.get(s["id"]) and s["id"] not in graph_ids
               and s.get("kind") not in NEVER_STEPS and s.get("kind") not in ACTION_KINDS
               and not any(a["id"] in chosen for a in ancestors(s))
               and not any(is_graph_node(a) for a in ancestors(s))]
+    for s in spans:  # tell span_roles which spans are control decisions
+        if s["id"] in controls:
+            s["_control"] = True
 
     def owner(span: dict[str, Any]) -> str | None:
         if span in routes:
@@ -207,9 +249,18 @@ def build_steps(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return steps
 
 
+def _control_ids(spans: list[dict[str, Any]]) -> set[str]:
+    ids = {s["id"] for s in spans if s.pop("_control", False)}
+    return ids
+
+
 def span_roles(spans: list[dict[str, Any]], steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """For every span: how it relates to the steps (so "26 spans -> 4 steps" can be checked span by span)."""
     by_id = {s["id"]: s for s in spans}
+    controls = _control_ids(spans)
+    if not controls and steps and steps[0].get("source") != "dataset":
+        build_steps(spans)  # marks control spans
+        controls = _control_ids(spans)
     step_of = {st["span_id"]: st["step"] for st in steps}
     dup_of = {d: st["step"] for st in steps for d in st.get("duplicate_span_ids", [])}
     part_of = {d: st["step"] for st in steps for d in st.get("nested_span_ids", [])}
@@ -250,6 +301,9 @@ def span_roles(spans: list[dict[str, Any]], steps: list[dict[str, Any]]) -> list
             role, nums, why = "duplicate", [dup_of[sid]], "the same call recorded by another instrumentation"
         elif sid in part_of:
             role, nums, why = "part", [part_of[sid]], "recorded inside the call of this step"
+        elif sid in controls:
+            role, nums = "control", []
+            why = "a control decision (routing / condition / start / output), not a message; not numbered"
         elif not s.get("parent_span_id") or s.get("parent_span_id") not in by_id:
             role, nums, why = "root", sorted(contains.get(sid, [])), "the whole run"
         elif contains.get(sid):

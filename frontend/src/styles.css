@@ -208,3 +208,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft
 .step-map-table th { text-align: left; font-weight: 600; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .step-map-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .t-route { background: #2f7bf6; }
+.flag { display: inline-block; font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 9px; margin-left: 4px; line-height: 17px; }
+.flag-label { background: #fde8e8; color: #c62828; }
+.flag-mark { background: #fff1db; color: #b45f00; }
+.step-row.flagged { box-shadow: inset 3px 0 0 #e5484d; }
+.note-flag { border-left: 3px solid #e5484d; margin: 8px 0; }
+.note-mark { border-left: 3px solid #f08c00; margin: 8px 0; }
+.mark-bar { margin: 8px 0; gap: 6px; }

@@ -124,7 +124,7 @@ export default function RunDetailPage({ runId }) {
       {tab === "graph" && <ReactFlowProvider><RunGraph run={run} spans={spans} onSelect={(id) => { setSelectedSpan(id); setTab("spans"); }} /></ReactFlowProvider>}
       {tab === "timeline" && <Timeline spans={spans} onSelect={(id) => { setSelectedSpan(id); setTab("spans"); }} />}
       {tab === "spans" && <SpanExplorer spans={spans} selected={selectedSpan} onSelect={setSelectedSpan} />}
-      {tab === "steps" && <StepsView runId={runId} steps={steps} spans={spans} onOpenSpan={(id) => { setSelectedSpan(id); setTab("spans"); }} />}
+      {tab === "steps" && <StepsView runId={runId} steps={steps} spans={spans} onChanged={load} onOpenSpan={(id) => { setSelectedSpan(id); setTab("spans"); }} />}
       {tab === "checkpoints" && !external && <Checkpoints run={run} />}
       {tab === "compare" && <Compare run={run} />}
       {tab === "io" && <div className="card card-pad"><Json label="Input" value={run.input} /><Json label="Output" value={run.output} /><Json label="Error" value={run.error} collapsed /></div>}
@@ -201,7 +201,7 @@ function Timeline({ spans, onSelect }) {
   );
 }
 
-const STEP_KIND_LABEL = { route: "routing decision", llm: "model call", tool: "tool call", retriever: "retrieval", embedding: "embedding", reranker: "rerank",
+const STEP_KIND_LABEL = { route: "routing decision", llm: "agent message (model call)", tool: "tool result", retriever: "retrieval", embedding: "embedding", reranker: "rerank",
   start: "start", output: "output", condition: "condition", agent: "agent node", node: "node", external: "span" };
 
 function fmtTokens(t) {
@@ -216,8 +216,9 @@ const ROLE_LABEL = {
   container: (n) => n.length ? `contains step${n.length > 1 ? "s" : ""} ${fmtRange(n)}` : "container",
   root: (n) => n.length ? `whole run (steps ${fmtRange(n)})` : "whole run",
   plumbing: () => "not a step",
+  control: () => "control, not numbered",
 };
-const ROLE_TONE = { step: "real", duplicate: "det", part: "neutral", container: "neutral", root: "neutral", plumbing: "neutral" };
+const ROLE_TONE = { control: "accent", step: "real", duplicate: "det", part: "neutral", container: "neutral", root: "neutral", plumbing: "neutral" };
 
 function fmtRange(nums) {
   if (!nums.length) return "";
@@ -235,8 +236,8 @@ function SpanStepMap({ runId, onOpenSpan }) {
   return (
     <details className="card step-map">
       <summary><strong>How {data.spans} spans became {data.steps} steps</strong>
-        <span className="muted"> · {count("step")} are steps · {count("duplicate")} duplicate records · {count("part")} part of a step · {count("container") + count("root")} containers · {count("plumbing")} not steps</span></summary>
-      <p className="muted" style={{ margin: "8px 0 10px" }}>A span is any timed record an instrumentation chose to write, so its count depends on how the agent was instrumented: one model call can be recorded by two instrumentations, and nodes, sequences and the run itself are containers around the calls. A step is one action the agent took: a model call, a tool call, a routing decision or a node without calls.</p>
+        <span className="muted"> · {count("step")} are steps · {count("duplicate")} duplicate records · {count("part")} part of a step · {count("container") + count("root")} containers · {count("control")} control · {count("plumbing")} not steps</span></summary>
+      <p className="muted" style={{ margin: "8px 0 10px" }}>A span is any timed record an instrumentation chose to write, so its count depends on how the agent was instrumented: one model call can be recorded by two instrumentations, and nodes, sequences and the run itself are containers around the calls. A step is one message: an agent's message (a model call) or a result coming back from a tool or the environment.</p>
       <table className="step-map-table">
         <thead><tr><th>Span</th><th>Kind</th><th>Relation to steps</th><th>Why</th></tr></thead>
         <tbody>
@@ -254,44 +255,83 @@ function SpanStepMap({ runId, onOpenSpan }) {
   );
 }
 
-function StepsView({ runId, steps, spans, onOpenSpan }) {
-  const [selected, setSelected] = useState(steps[0]?.step || null);
+function stepKindLabel(s) {
+  if (s.source === "dataset") return s.kind === "agent" ? "agent message" : s.kind === "tool" ? "environment / tool result" : "task / user message";
+  return STEP_KIND_LABEL[s.kind] || s.kind;
+}
+
+function StepFlags({ step }) {
+  return (
+    <>
+      {step.labels?.length > 0 && <span className="flag flag-label" title={`Dataset annotation: ${step.labels[0].agent || ""}`}>⚑ annotated</span>}
+      {(step.marks || []).map((m) => <span key={m.source} className="flag flag-mark" title={m.note || m.source}>⚑ {m.source}</span>)}
+    </>
+  );
+}
+
+function StepsView({ runId, steps, spans, onOpenSpan, onChanged }) {
+  const [selected, setSelected] = useState(steps[0]?.step ?? null);
   const [kind, setKind] = useState("");
   const [q, setQ] = useState("");
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [markSource, setMarkSource] = useState("localization");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState(null);
   const byId = Object.fromEntries(spans.map((s) => [s.id, s]));
+  const dataset = steps[0]?.source === "dataset";
   const kinds = [...new Set(steps.map((s) => s.kind))];
-  const shown = steps.filter((s) => (!kind || s.kind === kind) && (!q || `${s.step} ${s.name} ${s.agent || ""}`.toLowerCase().includes(q.toLowerCase())));
+  const flagged = (s) => s.labels?.length || s.marks?.length;
+  const shown = steps.filter((s) => (!kind || s.kind === kind) && (!flaggedOnly || flagged(s))
+    && (!q || `${s.step} ${s.name} ${s.agent || ""}`.toLowerCase().includes(q.toLowerCase())));
   const step = steps.find((s) => s.step === selected) || null;
-  const calls = steps.filter((s) => s.kind === "llm").length;
-  const tools = steps.filter((s) => ["tool", "retriever", "embedding", "reranker"].includes(s.kind)).length;
+  const agentMsgs = steps.filter((s) => s.kind === "llm" || (dataset && s.kind === "agent")).length;
+  const results = steps.filter((s) => ["tool", "retriever", "embedding", "reranker"].includes(s.kind)).length;
   const tokens = steps.reduce((n, s) => n + (s.tokens?.total || 0), 0);
   const errors = steps.filter((s) => s.status === "error").length;
-  if (!steps.length) return <Empty title="No steps yet">Steps appear once the run has recorded a model call, a tool call or a node.</Empty>;
+  const annotated = steps.filter((s) => s.labels?.length);
+  const marked = steps.filter((s) => s.marks?.length);
+  const mark = async (remove) => {
+    setError(null);
+    try {
+      if (remove) await api(`/api/runs/${runId}/marks?step=${step.step}&source=${encodeURIComponent(markSource)}`, { method: "DELETE" });
+      else await api(`/api/runs/${runId}/marks`, { method: "PUT", body: { step: step.step, source: markSource, note } });
+      setNote(""); await onChanged?.();
+    } catch (e) { setError(e); }
+  };
+  if (!steps.length) return <Empty title="No steps yet">Steps appear once the run has recorded an agent message (model call) or a tool / environment result.</Empty>;
+  const myMark = step?.marks?.find((m) => m.source === markSource);
   return (
     <div>
       <div className="steps-summary">
         <span><strong>{steps.length}</strong> steps</span>
-        <span><strong>{calls}</strong> model calls</span>
-        <span><strong>{tools}</strong> tool calls</span>
-        <span><strong>{steps.length - calls - tools}</strong> control / node steps</span>
+        <span><strong>{agentMsgs}</strong> agent messages</span>
+        <span><strong>{results}</strong> tool / environment results</span>
+        {steps.length - agentMsgs - results > 0 && <span><strong>{steps.length - agentMsgs - results}</strong> other messages</span>}
         <span className="muted">from <strong>{spans.length}</strong> spans</span>
         {tokens > 0 && <span><strong>{tokens.toLocaleString()}</strong> tokens</span>}
         {errors > 0 && <span className="err"><strong>{errors}</strong> with errors</span>}
+        {annotated.length > 0 && <span>annotated root-cause step: <a href="#" onClick={(e) => { e.preventDefault(); setSelected(annotated[0].step); }}><strong>{annotated.map((s) => s.step).join(", ")}</strong></a></span>}
+        {marked.length > 0 && <span>marked: <strong>{marked.map((s) => `${s.step} (${s.marks.map((m) => m.source).join(", ")})`).join(" · ")}</strong></span>}
       </div>
-      <SpanStepMap runId={runId} onOpenSpan={onOpenSpan} />
+      <p className="muted" style={{ fontSize: 12.5, margin: "0 0 10px" }}>
+        One step = one message: an agent's message (its reasoning and the action it takes, together) is one step, and the result that comes back from a tool or the environment is the next step. Control decisions (routing, conditions) are not numbered.
+        {dataset && " Step numbers are the dataset's own (each history entry's `step` field), so a localisation result points at the same message here."}
+      </p>
+      {!dataset && <SpanStepMap runId={runId} onOpenSpan={onOpenSpan} />}
       <div className="split">
         <div className="card">
-          <div className="row" style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-            <input placeholder="Filter by step no. / name / agent" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
-            <select value={kind} onChange={(e) => setKind(e.target.value)} style={{ width: 120 }}><option value="">all kinds</option>{kinds.map((k) => <option key={k} value={k}>{STEP_KIND_LABEL[k] || k}</option>)}</select>
+          <div className="row" style={{ padding: 10, borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
+            <input placeholder="Step no. / name / agent" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1, minWidth: 120 }} />
+            <select value={kind} onChange={(e) => setKind(e.target.value)} style={{ width: 150 }}><option value="">all kinds</option>{kinds.map((k) => <option key={k} value={k}>{stepKindLabel({ kind: k, source: steps[0].source })}</option>)}</select>
+            <label className="muted" style={{ fontSize: 12.5, display: "flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)} style={{ width: "auto" }} /> flagged only</label>
           </div>
           <div className="span-list">
             {shown.map((s) => (
-              <div key={s.step} className={`span-row step-row ${s.step === selected ? "selected" : ""}`} onClick={() => setSelected(s.step)}>
+              <div key={s.span_id} className={`span-row step-row ${s.step === selected ? "selected" : ""} ${flagged(s) ? "flagged" : ""}`} onClick={() => setSelected(s.step)}>
                 <span className="step-no">{s.step}</span>
-                <span className={`kind t-${s.kind}`}><Icon name={s.kind === "route" ? "condition" : s.kind} size={12} /></span>
-                <span className="name"><span className="step-agent">{s.agent || "—"}</span><span className="muted"> · {STEP_KIND_LABEL[s.kind] || s.kind}</span>{s.name !== s.agent && <><br /><span className="step-sub">{s.name}</span></>}</span>
-                <span className="muted" style={{ fontSize: 11.5 }}>{duration(s.start_time, s.end_time)}</span>
+                <span className={`kind t-${s.kind}`}><Icon name={s.kind} size={12} /></span>
+                <span className="name"><span className="step-agent">{s.agent || "—"}</span><span className="muted"> · {stepKindLabel(s)}</span> <StepFlags step={s} />{!dataset && s.name !== s.agent && <><br /><span className="step-sub">{s.name}</span></>}</span>
+                {!dataset && <span className="muted" style={{ fontSize: 11.5 }}>{duration(s.start_time, s.end_time)}</span>}
                 <Status value={s.status} />
               </div>
             ))}
@@ -300,21 +340,35 @@ function StepsView({ runId, steps, spans, onOpenSpan }) {
         <div className="card span-detail">
           {!step ? <Empty title="Select a step">Pick a step on the left.</Empty> : (
             <>
-              <div className="row"><span className="step-no big">{step.step}</span><span className={`badge t-${step.kind}`} style={{ color: "#fff", border: "none" }}>{STEP_KIND_LABEL[step.kind] || step.kind}</span><strong style={{ fontSize: 15 }}>{step.agent || step.name}</strong><Status value={step.status} /></div>
+              <div className="row"><span className="step-no big">{step.step}</span><span className={`badge t-${step.kind}`} style={{ color: "#fff", border: "none" }}>{stepKindLabel(step)}</span><strong style={{ fontSize: 15 }}>{step.agent || step.name}</strong><Status value={step.status} /><StepFlags step={step} /></div>
+              {step.labels?.map((l, i) => (
+                <div key={i} className="note note-flag"><strong>Dataset annotation{l.dataset ? ` (${l.dataset})` : ""}: root-cause step {step.step}</strong>{l.agent && <> · responsible: <b>{l.agent}</b></>}{l.reason && <div style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{l.reason}</div>}</div>
+              ))}
+              {step.marks?.map((m) => (
+                <div key={m.source} className="note note-mark"><strong>Marked by “{m.source}”</strong>{m.note && <div style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{m.note}</div>}</div>
+              ))}
+              <div className="row mark-bar">
+                <input value={markSource} onChange={(e) => setMarkSource(e.target.value)} title="Who marks this step (e.g. the localisation method)" style={{ width: 130 }} />
+                {!myMark && <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="note (optional)" style={{ flex: 1, minWidth: 100 }} />}
+                {myMark ? <button onClick={() => mark(true)}>Remove mark</button> : <button className="primary" onClick={() => mark(false)}>⚑ Mark step {step.step}</button>}
+              </div>
+              <ErrorBox error={error} />
               <dl className="kv">
-                <dt>Step</dt><dd>{step.step} of {steps.length}</dd>
-                <dt>Agent / node</dt><dd>{step.agent || "—"}</dd>
-                <dt>Name</dt><dd>{step.name}</dd>
+                <dt>Step</dt><dd>{step.step}{dataset ? ` (history entry ${step.dataset_position + 1} of ${steps.length})` : ` of ${steps.length}`}</dd>
+                <dt>{dataset ? "Sender" : "Agent / node"}</dt><dd>{step.agent || "—"}{step.role ? ` · role ${step.role}` : ""}</dd>
+                {!dataset && <><dt>Name</dt><dd>{step.name}</dd></>}
                 {step.model && <><dt>Model</dt><dd>{step.model}</dd></>}
                 {fmtTokens(step.tokens) && <><dt>Tokens</dt><dd className="mono">{fmtTokens(step.tokens)}</dd></>}
-                <dt>Start / end</dt><dd>{fmtTime(step.start_time)} → {step.end_time ? fmtTime(step.end_time) : "…"}</dd>
-                <dt>Duration</dt><dd>{duration(step.start_time, step.end_time)}</dd>
+                {!dataset && <><dt>Start / end</dt><dd>{fmtTime(step.start_time)} → {step.end_time ? fmtTime(step.end_time) : "…"}</dd><dt>Duration</dt><dd>{duration(step.start_time, step.end_time)}</dd></>}
                 <dt>Source span</dt><dd><a href="#" onClick={(e) => { e.preventDefault(); onOpenSpan(step.span_id); }} className="mono">{byId[step.span_id]?.name || step.span_id}</a></dd>
                 {step.nested_span_ids?.length > 0 && <><dt>Includes</dt><dd>{step.nested_span_ids.map((id) => <a key={id} href="#" onClick={(e) => { e.preventDefault(); onOpenSpan(id); }} style={{ marginRight: 8 }}>{byId[id]?.name || id}</a>)}</dd></>}
                 {step.duplicate_span_ids?.length > 0 && <><dt>Also recorded as</dt><dd className="muted">{step.duplicate_span_ids.map((id) => byId[id]?.name || id).join(", ")} (same call, another instrumentation)</dd></>}
               </dl>
               {step.error && <div className="error-box"><strong>{step.error.type}</strong>: {step.error.message}</div>}
-              {step.kind === "llm" && step.input?.messages ? (
+              {step.think && <div className="json"><div className="json-head" style={{ cursor: "default" }}>Reasoning (&lt;think&gt;)</div><pre style={{ margin: 0, padding: 10 }}>{step.think}</pre></div>}
+              {dataset ? (
+                <div className="json"><div className="json-head" style={{ cursor: "default" }}>Message</div><pre style={{ margin: 0, padding: 10, whiteSpace: "pre-wrap" }}>{typeof (step.output ?? step.input) === "string" ? (step.output ?? step.input) : pretty(step.output ?? step.input)}</pre></div>
+              ) : step.kind === "llm" && step.input?.messages ? (
                 <div className="json"><div className="json-head" style={{ cursor: "default" }}>Messages sent to the model</div>
                   <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
                     {step.input.messages.map((m, i) => (
@@ -324,7 +378,7 @@ function StepsView({ runId, steps, spans, onOpenSpan }) {
                   </div>
                 </div>
               ) : <Json label="Input" value={step.input} />}
-              <Json label="Output" value={step.output} />
+              {!dataset && <Json label="Output" value={step.output} />}
             </>
           )}
         </div>
