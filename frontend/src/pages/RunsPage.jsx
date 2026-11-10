@@ -5,6 +5,43 @@ import { Badge, Empty, ErrorBox, Field, Icon, ProviderBadge, Status } from "../c
 const MAX_FILE = 150 * 1024 * 1024;
 
 // "Import on top, list below" (like Connected agents): bring traces in from a file or live over OTLP/HTTP.
+// Localisation results for imported dataset trajectories: [{"question_ID": "...", "step": 21, "note"?: "..."}]
+function MarksImport({ onImported }) {
+  const [file, setFile] = useState(null);
+  const [source, setSource] = useState("localization");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const upload = async () => {
+    if (!file) return;
+    setError(null); setResult(null); setBusy(true);
+    try {
+      let items = JSON.parse(await file.text());
+      if (!Array.isArray(items)) items = items.items || Object.entries(items).map(([question_ID, step]) => ({ question_ID, step }));
+      const r = await api("/api/marks/import", { method: "POST", body: { items, source } });
+      setResult(r); onImported?.();
+    } catch (e) { setError(e); } finally { setBusy(false); }
+  };
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+      <div className="row" style={{ alignItems: "flex-end" }}>
+        <Field label="Step marks for imported trajectories (.json: [{question_ID, step}])">
+          <input type="file" accept=".json,application/json" onChange={(e) => { setFile(e.target.files?.[0] || null); setResult(null); setError(null); }} />
+        </Field>
+        <Field label="Mark as"><input value={source} onChange={(e) => setSource(e.target.value)} style={{ width: 150 }} /></Field>
+        <button onClick={upload} disabled={!file || busy}>⚑ {busy ? "Importing…" : "Import marks"}</button>
+      </div>
+      <ErrorBox error={error} />
+      {result && (
+        <div className="note" style={{ marginTop: 8 }}>
+          Marked {result.applied.length} step(s){result.missing.length ? ` · ${result.missing.length} skipped (${[...new Set(result.missing.map((m) => m.reason))].join(", ")}; import those trajectories first)` : ""}.
+          {result.applied.slice(0, 12).map((a) => <a key={a.run_id} href={`#/runs/${a.run_id}`} className="mono" style={{ marginLeft: 8 }}>{a.run_id.slice(4, 14)}·{a.step}</a>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TraceImport({ onImported }) {
   const [endpoint, setEndpoint] = useState("");
   const [file, setFile] = useState(null);
@@ -55,6 +92,7 @@ function TraceImport({ onImported }) {
           {result.runs?.length > 0 && <> Traces: {result.runs.map((id) => <a key={id} href={`#/runs/${id}`} className="mono" style={{ marginLeft: 8 }}>{id.slice(0, 16)}</a>)}</>}
         </div>
       )}
+      <MarksImport onImported={onImported} />
       {showLive && (
         <div style={{ marginTop: 12 }}>
           <Field label="OTLP/HTTP traces endpoint"><input readOnly value={endpoint} onFocus={(e) => e.target.select()} /></Field>

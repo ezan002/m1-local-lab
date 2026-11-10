@@ -134,7 +134,10 @@ fork 时允许修改的字段。对方代码不用改。详见 [studio-executor-
 **step 的定义（与 LongRCA / Who&When 的标注口径一致）**：一条消息是一步。智能体的一条消息（`<think>` 推理和它采取的动作合在一起）是一步，工具或环境返回的结果（例如 `Computer_terminal` 的输出）是下一步。路由判断、条件节点这类控制决策不是消息，不编号（在 span 对照表里标为 control）。
 
 - **导入的数据集轨迹**（External traces 上传 LongRCA 的 `.json` / `.jsonl` / `.parquet`）：`history` 里每一条消息就是一步，编号直接用消息自己的 `step` 字段（step 0 是任务说明），所以定位方法输出的“step 25”与数据集、Studio 指向同一条消息。数据集自带的标注（`mistake_step`、`mistake_agent`、`mistake_reason`）显示为红色旗标。读取 `.parquet` 需要 `pip install pyarrow`（或 `pip install -e ".[datasets]"`）。
-- **标记定位结果**：在 Steps 页选中一步，填写来源（如 `localization` 或方法名）和备注，点 **Mark step N**，显示为橙色旗标。批量导入：`POST /api/marks/import`，内容为 `{"source": "方法名", "items": [{"question_ID": "swe_bench_pro__012", "step": 21}, ...]}`。
+- **标记定位结果**：在 Steps 页选中一步，填写来源（如 `localization` 或方法名）和备注，点 **Mark step N**，显示为橙色旗标。批量导入：External traces 页导入区下方的 “Step marks for imported trajectories”，上传 `[{"question_ID": "swe_bench_pro__012", "step": 21}, ...]` 形式的 JSON，填写标记名后点 Import marks（对应接口 `POST /api/marks/import`）。
+- **一次导入整个 benchmark 和定位结果**（命令行，Studio 需在运行）：先下载数据（需要 `pip install huggingface_hub`）：
+  `python -c "from huggingface_hub import snapshot_download; snapshot_download('CLoud5-real/longrca-bench', repo_type='dataset', allow_patterns='data/full/*swe_bench_pro__*', local_dir='data/longrca')"`，
+  再运行 `python scripts/import_trajectories.py data/longrca --marks 定位结果.json --source localization`。
 - **Studio 自己记录的运行**：每次模型调用（智能体的一条消息）是一步，每次工具调用的结果是一步。一个节点 span 可以包含多步，例如 Researcher 节点：模型决定调用工具 → 工具返回结果 → 模型写结论，共 3 步；节点 span、chain 序列、同一调用的重复记录都不是步骤，Steps 页的 “How N spans became M steps” 对照表逐个说明。
 
 结构图从哪来：接入的智能体，结构来自它运行时的 LangGraph 图对象，所以没走到的节点也会画出来；外部轨迹没有图对象，
